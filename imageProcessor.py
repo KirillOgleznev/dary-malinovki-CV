@@ -11,14 +11,14 @@ from colorBar import getColor, getBlur, getWatershedSens
 
 class ImageProcessor(object):
     COLOR_ACCURACY = -5
-    potato_id = 0
-    potatoes = []
 
     def __init__(self, src):
         # cap = cv2.VideoCapture(0)
         # cap = cv2.VideoCapture('1.mp4')
         self.img = cv2.imread(src)
         self.frame = self.img.copy()
+        self.potato_id = 0
+        self.potatoes = []
         self.hsv_belt = None
         self.threshold = None
         self.belt = None
@@ -66,6 +66,8 @@ class ImageProcessor(object):
 
     def find_and_draw_contours(self):
         # _, img = cap.read()
+        self.potato_id = 0
+        self.potatoes = []
         self.frame = self.img.copy()
         self.belt = self.frame.copy()
         self.watershed()
@@ -177,7 +179,8 @@ class ImageProcessor(object):
             self.potatoes.append([self.potato_id, [int(x) for x in mean]])
             # cv2.putText(self.frame, ('%02d%02d%02d' % mean[:3])[:self.COLOR_ACCURACY], (int(x1) - 50, int(y1) + 20),
             #             1, 6, (0, 255, 0), 6, cv2.LINE_AA)
-            cv2.putText(self.frame, str(self.potato_id), (int(x1) - 50, int(y1) + 20), 1, 6, (0, 255, 0), 6, cv2.LINE_AA)
+            cv2.putText(self.frame, str(self.potato_id), (int(x1) - 50, int(y1) + 20), 1, 6, (0, 255, 0), 6,
+                        cv2.LINE_AA)
             # cv2.putText(frame, str([round(i) for i in mean[:3]]), (x, y), 1, 1.2, (0, 255, 0), 2, cv2.LINE_AA)
             self.potato_id += 1
         else:
