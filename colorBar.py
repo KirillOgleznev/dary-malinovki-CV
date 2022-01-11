@@ -19,7 +19,7 @@ from skimage.color import label2rgb
 # icol = (1, 3, 66, 94, 118, 255, 1)  # 666.jpg
 # icol = (0, 0, 3, 28, 255, 255, 50)  # video.jpg
 # icol = (79, 37, 36, 136, 155, 255, 2, 26)  # 3.jpg
-icol = (0, 0, 30, 103, 117, 255, 2, 20)  # 5.jpg
+icol = (0, 0, 30, 100, 100, 255, 2, 100)  # 5.jpg
 
 def nothing(x):
     pass
@@ -33,8 +33,8 @@ cv2.createTrackbar("l_v", "Tracking", icol[2], 255, nothing)
 cv2.createTrackbar("u_h", "Tracking", icol[3], 255, nothing)
 cv2.createTrackbar("u_s", "Tracking", icol[4], 255, nothing)
 cv2.createTrackbar("u_v", "Tracking", icol[5], 255, nothing)
-cv2.createTrackbar("blur", "Tracking", icol[6], 50, nothing)
-cv2.createTrackbar("ws_sens", "Tracking", icol[7], 50, nothing)
+cv2.createTrackbar("blur", "Tracking", icol[6], 10, nothing)
+cv2.createTrackbar("ws_sens", "Tracking", icol[7], 300, nothing)
 
 
 def getColor():

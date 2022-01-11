@@ -9,37 +9,65 @@ import numpy as np
 from colorBar import getColor, getBlur, getWatershedSens
 
 
-class ImageProcessing(object):
+class ImageProcessor(object):
     COLOR_ACCURACY = -5
+    potato_id = 0
+    potatoes = []
 
     def __init__(self, src):
-        img = cv2.imread(src)
-        (w, h, c) = img.shape
-        self.img = cv2.resize(img, (int(h / 4), int(w / 4)))
+        # cap = cv2.VideoCapture(0)
+        # cap = cv2.VideoCapture('1.mp4')
+        self.img = cv2.imread(src)
         self.frame = self.img.copy()
+        self.hsv_belt = None
+        self.threshold = None
+        self.belt = None
         # self.shifted = cv2.pyrMeanShiftFiltering(img, 21, 51)
+
+    def resize(self, num):
+        (w, h, c) = self.img.shape
+        # self.img = cv2.resize(self.img, (int(h / 4), int(w / 4)))
+        self.frame = cv2.resize(self.frame, (int(h / num), int(w / num)))
+        self.threshold = cv2.resize(self.threshold, (int(h / num), int(w / num)))
+        self.hsv_belt = cv2.resize(self.hsv_belt, (int(h / num), int(w / num)))
+        self.belt = cv2.resize(self.belt, (int(h / num), int(w / num)))
+        # img = img[303:746, 427:1297]
+        # img = img[76:326, 17:691]
+
+    def showAll(self):
+        cv2.imshow("Frame", self.frame)
+        cv2.imshow("belt", self.belt)
+        cv2.imshow("threshold", self.threshold)
+        cv2.imshow("tmp", self.hsv_belt)
+
+    def get_key(self, num):
+        key = cv2.waitKey(num)
+        return key
 
     def watershed(self):
         RGB_belt = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
-        hsv_belt = cv2.cvtColor(RGB_belt, cv2.COLOR_BGR2HSV)
+        self.hsv_belt = cv2.cvtColor(RGB_belt, cv2.COLOR_BGR2HSV)
         lowHue, lowSat, lowVal, highHue, highSat, highVal = getColor()
         colorLow = np.array([lowHue, lowSat, lowVal])
         colorHigh = np.array([highHue, highSat, highVal])
-        threshold = cv2.inRange(hsv_belt, colorLow, colorHigh)
-        threshold = cv2.medianBlur(threshold, getBlur())
-        threshold = 255 - threshold
-        closing = cv2.morphologyEx(threshold, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8), iterations=1)
-        D = cv2.distanceTransform(threshold, cv2.DIST_L1, 3)
+        self.threshold = cv2.inRange(self.hsv_belt, colorLow, colorHigh)
+        self.threshold = cv2.medianBlur(self.threshold, getBlur())
+        self.threshold = 255 - self.threshold
+        closing = cv2.morphologyEx(self.threshold, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8), iterations=1)
+        D = cv2.distanceTransform(self.threshold, cv2.DIST_L1, 3)
         D = cv2.normalize(D, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
         # cv2.imwrite('png.png', D)
 
         localMax = peak_local_max(D, indices=False, min_distance=getWatershedSens(),
-                                  labels=threshold)
+                                  labels=self.threshold)
 
         markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
-        self.labels = watershed(-D, markers, mask=threshold)
+        self.labels = watershed(-D, markers, mask=self.threshold)
 
     def find_and_draw_contours(self):
+        # _, img = cap.read()
+        self.frame = self.img.copy()
+        self.belt = self.frame.copy()
         self.watershed()
         for label in np.unique(self.labels):
             if label == 0:
@@ -49,7 +77,7 @@ class ImageProcessing(object):
             mask[self.labels == label] = 255
             # detect contours in the mask and grab the largest one
             cnts, _ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
-                                    cv2.CHAIN_APPROX_SIMPLE)
+                                       cv2.CHAIN_APPROX_SIMPLE)
             cnt = max(cnts, key=cv2.contourArea)
             if len(cnt) < 5:
                 continue
@@ -61,7 +89,7 @@ class ImageProcessing(object):
         ((x1, y1), r1) = cv2.minEnclosingCircle(cntr)
 
         #  убрать мелкий шум
-        if area > 300:
+        if area > 3000:
             # cv2.rectangle(belt, (x, y), (x + w, y + h), (0, 0, 255), 2)
             # ellipse = cv2.fitEllipse(cnt)
             # cv2.ellipse(belt, ellipse, (0, 0, 255), 2)
@@ -140,23 +168,25 @@ class ImageProcessing(object):
             # Вывод характеризующего коэфф-а картофеля
 
             # cv2.drawContours(frame, [hull], 0, (randrange(255), randrange(255), randrange(255)), 2)
-            cv2.drawContours(self.frame, [cntr], 0, (randrange(255), randrange(255), randrange(255)), 2)
+            cv2.drawContours(self.frame, [cntr], 0, (randrange(255), randrange(255), randrange(255)), 10)
             # cv2.ellipse(frame, cv2.fitEllipse(cnt), (0, 0, 255), 2)
             # cv2.circle(frame, (int(x1), int(y1)), int(r1), (randrange(255), randrange(255), 255), 2)
 
             maskTmp = cv2.drawContours(np.zeros(self.img.shape[:2], np.uint8), [cntr], -1, 255, -1)
             mean = cv2.mean(self.img, mask=maskTmp)
-
-            cv2.putText(self.frame, ('%02d%02d%02d' % mean[:3])[:self.COLOR_ACCURACY], (int(x1) - 10, int(y1)), 1, 1.2, (0, 0, 0),
-                        6,
-                        cv2.LINE_AA)
-            cv2.putText(self.frame, ('%02d%02d%02d' % mean[:3])[:self.COLOR_ACCURACY], (int(x1) - 10, int(y1)), 1, 1.2,
-                        (0, 255, 0),
-                        2,
-                        cv2.LINE_AA)
+            self.potatoes.append([self.potato_id, [int(x) for x in mean]])
+            # cv2.putText(self.frame, ('%02d%02d%02d' % mean[:3])[:self.COLOR_ACCURACY], (int(x1) - 50, int(y1) + 20),
+            #             1, 6, (0, 255, 0), 6, cv2.LINE_AA)
+            cv2.putText(self.frame, str(self.potato_id), (int(x1) - 50, int(y1) + 20), 1, 6, (0, 255, 0), 6, cv2.LINE_AA)
             # cv2.putText(frame, str([round(i) for i in mean[:3]]), (x, y), 1, 1.2, (0, 255, 0), 2, cv2.LINE_AA)
-            cv2.imshow("Frame", self.frame)
-            # cv2.waitKey(0)
+            self.potato_id += 1
         else:
 
-            cv2.putText(self.img, str('Err'), (int(x1) - 10, int(y1)), 1, 1.5, (0, 255, 0), 2, cv2.LINE_AA)
+            cv2.putText(self.belt, str('Err'), (int(x1) - 10, int(y1)), 1, 6, (0, 255, 0), 6, cv2.LINE_AA)
+
+    def create_report(self):
+        # print(self.potatoes)
+        f = open('text.txt', 'w')
+        for i in self.potatoes:
+            f.write(str(i)[1:-1] + '\n')
+        f.close()
