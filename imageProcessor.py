@@ -10,7 +10,20 @@ from colorBar import getColor, getBlur, getWatershedSens
 
 
 class ImageProcessor(object):
+    """
+    Класс ImageProcessor используется для анализа изображения:
+        - Нахождение клбней картофеля на фото;
+        - Подсчет клбней картофеля;
+        - Цветовая хар-ка клубней картофеля; TO DO
+        - Степень отклонения клубня от эллипсоидной формы;
+        - Размер; TO DO
+        - Вес; TO DO
+    """
+
     COLOR_ACCURACY = -5
+    # Множитель преобразования пикселей в сантиметры
+    PIXEL_TO_CM = 0.002
+    COLUMNS_NAMES = 'id;RGB;area_defect'
 
     def __init__(self, src):
         # cap = cv2.VideoCapture(0)
@@ -25,26 +38,44 @@ class ImageProcessor(object):
         # self.shifted = cv2.pyrMeanShiftFiltering(img, 21, 51)
 
     def resize(self, num):
+        """
+        Метод изменения размера окана
+        :param num: Коэффициент уменьшения (Множитель)
+        :return: None
+        """
         (w, h, c) = self.img.shape
         # self.img = cv2.resize(self.img, (int(h / 4), int(w / 4)))
-        self.frame = cv2.resize(self.frame, (int(h / num), int(w / num)))
-        self.threshold = cv2.resize(self.threshold, (int(h / num), int(w / num)))
-        self.hsv_belt = cv2.resize(self.hsv_belt, (int(h / num), int(w / num)))
-        self.belt = cv2.resize(self.belt, (int(h / num), int(w / num)))
+        self.frame = cv2.resize(self.frame, (int(h * num), int(w * num)))
+        self.threshold = cv2.resize(self.threshold, (int(h * num), int(w * num)))
+        self.hsv_belt = cv2.resize(self.hsv_belt, (int(h * num), int(w * num)))
+        self.belt = cv2.resize(self.belt, (int(h * num), int(w * num)))
         # img = img[303:746, 427:1297]
         # img = img[76:326, 17:691]
 
     def showAll(self):
+        """
+        Метод вывода информационных окон
+        :return: None
+        """
         cv2.imshow("Frame", self.frame)
         cv2.imshow("belt", self.belt)
         cv2.imshow("threshold", self.threshold)
         cv2.imshow("tmp", self.hsv_belt)
 
     def get_key(self, num):
+        """
+        Метод для вызова паузы и считывания введенного символа
+        :param num: При значении 0 ожидает ввода люього символа
+        :return: Символ который был введен
+        """
         key = cv2.waitKey(num)
         return key
 
     def watershed(self):
+        """
+        Алгоритм сегментации близко находящихся клубней
+        :return: Разделенный контур
+        """
         RGB_belt = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
         self.hsv_belt = cv2.cvtColor(RGB_belt, cv2.COLOR_BGR2HSV)
         lowHue, lowSat, lowVal, highHue, highSat, highVal = getColor()
@@ -62,21 +93,25 @@ class ImageProcessor(object):
                                   labels=self.threshold)
 
         markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
-        self.labels = watershed(-D, markers, mask=self.threshold)
+        return watershed(-D, markers, mask=self.threshold)
 
     def find_and_draw_contours(self):
+        """
+        Метод находит контуры картофеля и рисует их на окне "Frame"
+        :return: None
+        """
         # _, img = cap.read()
         self.potato_id = 0
-        self.potatoes = []
+        self.potatoes = [self.COLUMNS_NAMES]
         self.frame = self.img.copy()
         self.belt = self.frame.copy()
-        self.watershed()
-        for label in np.unique(self.labels):
+        labels = self.watershed()
+        for label in np.unique(labels):
             if label == 0:
                 continue
             gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
             mask = np.zeros(gray.shape, dtype="uint8")
-            mask[self.labels == label] = 255
+            mask[labels == label] = 255
             # detect contours in the mask and grab the largest one
             cnts, _ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
                                        cv2.CHAIN_APPROX_SIMPLE)
@@ -87,20 +122,17 @@ class ImageProcessor(object):
             # cv2.drawContours(frame, cnts, 0, (randrange(255), randrange(255), randrange(255)), 2)
 
     def draw_contour(self, cntr):
+        """
+        Рисует контур картофеля на окне "Frame"
+           Также вызывает метод анализа клубня
+        :param cntr: Контур 1 клубня
+        :return: None
+        """
         area = cv2.contourArea(cntr)
         ((x1, y1), r1) = cv2.minEnclosingCircle(cntr)
 
         #  убрать мелкий шум
         if area > 3000:
-            # cv2.rectangle(belt, (x, y), (x + w, y + h), (0, 0, 255), 2)
-            # ellipse = cv2.fitEllipse(cnt)
-            # cv2.ellipse(belt, ellipse, (0, 0, 255), 2)
-            hull = cv2.convexHull(cntr, False)
-
-            # maskTest = cv2.ellipse(np.zeros(img.shape[:2], np.uint8), ellipse, 255, -1)
-            # cv2.imshow("Frame2", maskTest)
-            areaCnt = int(cv2.contourArea(cntr))
-            areaHull = int(cv2.contourArea(hull))
 
             # qwe = cv2.drawContours(img.copy(), [hull], 0, (0, 0, 255), 6)
             # cv2.drawContours(qwe, [cnt], 0, (0, 255, 0), 2)
@@ -176,7 +208,9 @@ class ImageProcessor(object):
 
             maskTmp = cv2.drawContours(np.zeros(self.img.shape[:2], np.uint8), [cntr], -1, 255, -1)
             mean = cv2.mean(self.img, mask=maskTmp)
-            self.potatoes.append([self.potato_id, [int(x) for x in mean]])
+            self.potatoes.append(str(self.potato_id) + ';' +
+                                 str([int(x) for x in mean][2:: -1]) + ';' +
+                                 str(self.ellipse_deviation(cntr)))
             # cv2.putText(self.frame, ('%02d%02d%02d' % mean[:3])[:self.COLOR_ACCURACY], (int(x1) - 50, int(y1) + 20),
             #             1, 6, (0, 255, 0), 6, cv2.LINE_AA)
             cv2.putText(self.frame, str(self.potato_id), (int(x1) - 50, int(y1) + 20), 1, 6, (0, 255, 0), 6,
@@ -187,9 +221,29 @@ class ImageProcessor(object):
 
             cv2.putText(self.belt, str('Err'), (int(x1) - 10, int(y1)), 1, 6, (0, 255, 0), 6, cv2.LINE_AA)
 
+    def ellipse_deviation(self, cntr):
+        """
+        Метод вычисляет отклонение формы клубня от эллипсоидной формы
+        :param cntr: Контур анализируемого клубня
+        :return: Отклонение от эллипса в сантиметрах
+        """
+        # cv2.rectangle(belt, (x, y), (x + w, y + h), (0, 0, 255), 2)
+        # ellipse = cv2.fitEllipse(cnt)
+        # cv2.ellipse(belt, ellipse, (0, 0, 255), 2)
+        hull = cv2.convexHull(cntr, False)
+        ellipse = cv2.fitEllipse(hull)
+        areaCnt = int(cv2.contourArea(cntr))
+        areaEllipse = int(np.pi / 4 * ellipse[1][0] * ellipse[1][1])
+        # areaHull = int(cv2.contourArea(hull))
+        return int((areaEllipse - areaCnt) * self.PIXEL_TO_CM)
+
     def create_report(self):
+        """
+        Метод сохраняет данные о клубнях в таблицу table.csv
+        :return: None
+        """
         # print(self.potatoes)
-        f = open('text.txt', 'w')
+        f = open('table.csv', 'w')
         for i in self.potatoes:
-            f.write(str(i)[1:-1] + '\n')
+            f.write(str(i) + '\n')
         f.close()
