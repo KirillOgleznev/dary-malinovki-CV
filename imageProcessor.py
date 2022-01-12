@@ -25,10 +25,22 @@ class ImageProcessor(object):
     PIXEL_TO_CM = 0.002
     COLUMNS_NAMES = 'id;RGB;area_defect'
 
-    def __init__(self, src):
+    def __init__(self, srcImg, srcVideo, camera=0, ratio=1):
         # cap = cv2.VideoCapture(0)
         # cap = cv2.VideoCapture('1.mp4')
-        self.img = cv2.imread(src)
+        self.ratio = ratio
+        if srcImg:
+            self.img = cv2.imread(srcImg)
+            (w, h, c) = self.img.shape
+            self.img = cv2.resize(self.img, (int(h * ratio), int(w * ratio)))
+        elif srcVideo:
+            self.cap = cv2.VideoCapture(srcVideo)
+            self.update_frame()
+        else:
+            self.cap = cv2.VideoCapture(camera)
+            self.update_frame()
+        if self.img is None:
+            raise Exception('Scr not found!')
         self.frame = self.img.copy()
         self.potato_id = 0
         self.potatoes = []
@@ -36,6 +48,11 @@ class ImageProcessor(object):
         self.threshold = None
         self.belt = None
         # self.shifted = cv2.pyrMeanShiftFiltering(img, 21, 51)
+
+    def update_frame(self):
+        _, self.img = self.cap.read()
+        (w, h, c) = self.img.shape
+        self.img = cv2.resize(self.img, (int(h * self.ratio), int(w * self.ratio)))
 
     def resize(self, num):
         """
@@ -231,6 +248,8 @@ class ImageProcessor(object):
         # ellipse = cv2.fitEllipse(cnt)
         # cv2.ellipse(belt, ellipse, (0, 0, 255), 2)
         hull = cv2.convexHull(cntr, False)
+        if len(hull) < 5:
+            return -1
         ellipse = cv2.fitEllipse(hull)
         areaCnt = int(cv2.contourArea(cntr))
         areaEllipse = int(np.pi / 4 * ellipse[1][0] * ellipse[1][1])
