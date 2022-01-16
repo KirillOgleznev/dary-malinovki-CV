@@ -9,30 +9,26 @@ import numpy as np
 from colorBar import getColor, getBlur, getWatershedSens
 
 
-class ImageProcessor(object):
-    """
-    Класс ImageProcessor используется для анализа изображения:
-        - Нахождение клбней картофеля на фото;
-        - Подсчет клбней картофеля;
-        - Цветовая хар-ка клубней картофеля; TO DO
-        - Степень отклонения клубня от эллипсоидной формы;
-        - Размер; TO DO
-        - Вес; TO DO
-    """
-
+class ImageProcessor:
     COLOR_ACCURACY = -5
     # Множитель преобразования пикселей в сантиметры
     PIXEL_TO_CM = 0.002
     COLUMNS_NAMES = 'id;RGB;area_defect'
 
-    def __init__(self, srcImg, srcVideo, camera=0, ratio=1):
-        # cap = cv2.VideoCapture(0)
-        # cap = cv2.VideoCapture('1.mp4')
+    def __init__(self, srcImg=None, srcVideo=None, camera=0, ratio=1):
+        """
+
+        :param srcImg: Путь до изображения
+        :param srcVideo: Путь до видео
+        :param camera: Номер камеры подключенной к ПК
+        :param ratio: Множитель изменения входящего изображения (можно использовать для оптимизации)
+        """
         self.ratio = ratio
         if srcImg:
             self.img = cv2.imread(srcImg)
             (w, h, c) = self.img.shape
             self.img = cv2.resize(self.img, (int(h * ratio), int(w * ratio)))
+            self.cap = None
         elif srcVideo:
             self.cap = cv2.VideoCapture(srcVideo)
             self.update_frame()
@@ -50,6 +46,10 @@ class ImageProcessor(object):
         # self.shifted = cv2.pyrMeanShiftFiltering(img, 21, 51)
 
     def update_frame(self):
+        """
+        Обновляет кадр (Только для видео)
+        :return: None
+        """
         _, self.img = self.cap.read()
         (w, h, c) = self.img.shape
         self.img = cv2.resize(self.img, (int(h * self.ratio), int(w * self.ratio)))
@@ -77,7 +77,6 @@ class ImageProcessor(object):
         cv2.imshow("Frame", self.frame)
         cv2.imshow("belt", self.belt)
         cv2.imshow("threshold", self.threshold)
-        cv2.imshow("tmp", self.hsv_belt)
 
     def get_key(self, num):
         """
@@ -101,15 +100,20 @@ class ImageProcessor(object):
         self.threshold = cv2.inRange(self.hsv_belt, colorLow, colorHigh)
         self.threshold = cv2.medianBlur(self.threshold, getBlur())
         self.threshold = 255 - self.threshold
-        closing = cv2.morphologyEx(self.threshold, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8), iterations=1)
-        D = cv2.distanceTransform(self.threshold, cv2.DIST_L1, 3)
-        D = cv2.normalize(D, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
+        # closing = cv2.morphologyEx(self.threshold, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8), iterations=1)
+        # D = cv2.distanceTransform(self.threshold, cv2.DIST_L1, 3)
+        # D = cv2.normalize(D, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
+        D = ndimage.distance_transform_edt(self.threshold)
         # cv2.imwrite('png.png', D)
 
-        localMax = peak_local_max(D, indices=False, min_distance=getWatershedSens(),
-                                  labels=self.threshold)
+        # localMax = peak_local_max(D, indices=False, min_distance=getWatershedSens(),
+        #                           labels=self.threshold)
+        # markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
+        coords = peak_local_max(D, min_distance=getWatershedSens(), labels=self.threshold)
+        mask = np.zeros(D.shape, dtype=bool)
+        mask[tuple(coords.T)] = True
+        markers, _ = ndimage.label(mask)
 
-        markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
         return watershed(-D, markers, mask=self.threshold)
 
     def find_and_draw_contours(self):
@@ -137,6 +141,8 @@ class ImageProcessor(object):
                 continue
             self.draw_contour(cnt[:, 0])
             # cv2.drawContours(frame, cnts, 0, (randrange(255), randrange(255), randrange(255)), 2)
+        if self.cap:
+            self.update_frame()
 
     def draw_contour(self, cntr):
         """
@@ -149,7 +155,7 @@ class ImageProcessor(object):
         ((x1, y1), r1) = cv2.minEnclosingCircle(cntr)
 
         #  убрать мелкий шум
-        if area > 3000:
+        if area > 1000 * self.ratio:
 
             # qwe = cv2.drawContours(img.copy(), [hull], 0, (0, 0, 255), 6)
             # cv2.drawContours(qwe, [cnt], 0, (0, 255, 0), 2)
@@ -219,7 +225,7 @@ class ImageProcessor(object):
             # Вывод характеризующего коэфф-а картофеля
 
             # cv2.drawContours(frame, [hull], 0, (randrange(255), randrange(255), randrange(255)), 2)
-            cv2.drawContours(self.frame, [cntr], 0, (randrange(255), randrange(255), randrange(255)), 10)
+
             # cv2.ellipse(frame, cv2.fitEllipse(cnt), (0, 0, 255), 2)
             # cv2.circle(frame, (int(x1), int(y1)), int(r1), (randrange(255), randrange(255), 255), 2)
 
@@ -230,12 +236,13 @@ class ImageProcessor(object):
                                  str(self.ellipse_deviation(cntr)))
             # cv2.putText(self.frame, ('%02d%02d%02d' % mean[:3])[:self.COLOR_ACCURACY], (int(x1) - 50, int(y1) + 20),
             #             1, 6, (0, 255, 0), 6, cv2.LINE_AA)
-            cv2.putText(self.frame, str(self.potato_id), (int(x1) - 50, int(y1) + 20), 1, 6, (0, 255, 0), 6,
-                        cv2.LINE_AA)
+            # (randrange(200), 255, randrange(200))
+            cv2.drawContours(self.frame, [cntr], 0, [255 - i for i in [int(x) for x in mean][0:3]], int(7 * self.ratio))
+            cv2.putText(self.frame, str(self.potato_id), (int(x1 - 40 * self.ratio), int(y1 + 33 * self.ratio)),
+                        3, 3.3 * self.ratio, (0, 255, 0), 1, cv2.LINE_AA)
             # cv2.putText(frame, str([round(i) for i in mean[:3]]), (x, y), 1, 1.2, (0, 255, 0), 2, cv2.LINE_AA)
             self.potato_id += 1
         else:
-
             cv2.putText(self.belt, str('Err'), (int(x1) - 10, int(y1)), 1, 6, (0, 255, 0), 6, cv2.LINE_AA)
 
     def ellipse_deviation(self, cntr):

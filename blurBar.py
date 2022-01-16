@@ -3,7 +3,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.mixture import GaussianMixture
 
-icol = (5, 115, 191)
+icol = (20, 5, 20)
 
 
 # class ColorBar:
@@ -14,12 +14,12 @@ def nothing(x):
 
 
 cv2.namedWindow("Blur")
-cv2.createTrackbar("a", "Blur", icol[0], 20, nothing)  # создание элемента  Trackbar
-cv2.createTrackbar("b", "Blur", icol[1], 500, nothing)
-cv2.createTrackbar("c", "Blur", icol[2], 2000, nothing)
+cv2.createTrackbar("a", "Blur", icol[0], 50, nothing)  # создание элемента  Trackbar
+cv2.createTrackbar("b", "Blur", icol[1], 50, nothing)
+cv2.createTrackbar("c", "Blur", icol[2], 50, nothing)
 
 
-def getBlur():
+def getABC():
     a = cv2.getTrackbarPos("a", "Blur")
     b = cv2.getTrackbarPos("b", "Blur")
     c = cv2.getTrackbarPos("c", "Blur")

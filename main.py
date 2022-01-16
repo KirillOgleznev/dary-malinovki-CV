@@ -7,8 +7,8 @@ from imageProcessor import ImageProcessor
 
 if __name__ == '__main__':
     # Создание объекта класса анализатора фото
-    # imgAnalyzer = ImageProcessor(src='data/5.jpg')
-    imgAnalyzer = ImageProcessor(srcImg=None, srcVideo='data/1.mp4', ratio=0.3)
+    # 'data/5.jpg', 'data/1.mp4'
+    imgAnalyzer = ImageProcessor(srcImg='data/6.jpg', ratio=0.3)
     num = 0
     key = 0
 
@@ -18,7 +18,6 @@ if __name__ == '__main__':
         imgAnalyzer.resize(1)
         imgAnalyzer.showAll()
         imgAnalyzer.create_report()
-        imgAnalyzer.update_frame()
 
         key = imgAnalyzer.get_key(num)
         num = 1

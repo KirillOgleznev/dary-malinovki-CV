@@ -1,6 +1,6 @@
 import time
 
-import cv2
+from cv2 import cv2
 import numpy as np
 import skimage.segmentation
 from matplotlib import pyplot as plt
@@ -19,7 +19,9 @@ from skimage.color import label2rgb
 # icol = (1, 3, 66, 94, 118, 255, 1)  # 666.jpg
 # icol = (0, 0, 3, 28, 255, 255, 50)  # video.jpg
 # icol = (79, 37, 36, 136, 155, 255, 2, 26)  # 3.jpg
-icol = (0, 0, 30, 100, 100, 255, 2, 100)  # 5.jpg
+# icol = (0, 0, 33, 102, 85, 255, 2, 20)  # 5.jpg
+icol = (56, 60, 80, 103, 255, 255, 0, 20)  # 5.jpg0
+
 
 def nothing(x):
     pass
@@ -64,57 +66,39 @@ def coords(event, x, y, flags, param):
 
 
 if __name__ == '__main__':
-    img = cv2.imread('3.jpg')
-    # img = cv2.resize(img, (711, 400))
-    # img = img[76:326, 17:691]
+    cap = cv2.VideoCapture(0)
 
     while True:
-        timeCheck = time.time()
-        # (w, h, c) = frame.shape
-        # frame = cv2.resize(frame, (int(h / 3), int(w / 3)))
 
-        hsv_belt = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2HSV)
+        _, img = cap.read()
+        # img = cv2.imread('data/5.jpg')
+        # (w, h, c) = img.shape
+        # img = cv2.resize(img, (int(h * 0.7), int(w * 0.7)))
 
-        colorLow = np.array([78, 40, 23])
-        colorHigh = np.array([120, 184, 221])
-        threshold1 = cv2.inRange(hsv_belt, colorLow, colorHigh)
-        threshold1 = cv2.medianBlur(threshold1, 3)
-        frame = cv2.bitwise_and(img, img, mask=255 - threshold1)
+        frame = img.copy()
 
-        cv2.imshow("threshold1", frame)
-
-        hsv_belt = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2HSV)
+        RGB_belt = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        hsv_belt = cv2.cvtColor(RGB_belt, cv2.COLOR_BGR2HSV)
         lowHue, lowSat, lowVal, highHue, highSat, highVal = getColor()
         colorLow = np.array([lowHue, lowSat, lowVal])
         colorHigh = np.array([highHue, highSat, highVal])
         threshold = cv2.inRange(hsv_belt, colorLow, colorHigh)
         threshold = cv2.medianBlur(threshold, getBlur())
-        cv2.imshow("threshold", threshold)
-        # a, b, c = qwe()
-        # a = ((a // 2) * 2) + 1
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # threshold = 255 - threshold
 
-        blur = cv2.bilateralFilter(gray, 1, 200, 200)
-        # blur = cv2.medianBlur(gray, a)
+        cnts, _ = cv2.findContours(threshold, cv2.RETR_EXTERNAL,
+                                   cv2.CHAIN_APPROX_SIMPLE)
 
-        # laplacian = cv2.Canny(blur, b, c)
-        laplacian = cv2.Laplacian(blur, -1, ksize=5, delta=191 - 1000)
-        cv2.imshow("laplacian", laplacian)
+        for cnt in cnts:
+            if len(cnt) < 50:
+                continue
+            # cv2.drawContours(frame, [cnt], 0, (0, 255, 0), 2)
+            x, y, w, h = cv2.boundingRect(cnt)
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-        dilation = cv2.dilate(laplacian, kernel, iterations=1)
-        cv2.imshow("dilation", dilation)
+        cv2.imshow('Frame', frame)
+        cv2.imshow('threshold', threshold)
 
-        # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        # ret, threshold = cv2.threshold(gray, lowHue, 255, 1)
-        # contours, _ = cv2.findContours(threshold, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        # cv2.drawContours(frame, contours, 0, (0, 0, 255), 2)
-
-        cv2.namedWindow('image')
-        cv2.setMouseCallback('image', coords)
-        cv2.imshow("image", blur)
-
-        print(60 / (time.time() - timeCheck))
         key = cv2.waitKey(1)
         if key == 27:
             break
