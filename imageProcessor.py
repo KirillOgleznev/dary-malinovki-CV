@@ -11,12 +11,12 @@ from colorBar import getColor, getBlur, getWatershedSens
 class ImageProcessor:
     COLOR_ACCURACY = -5
     # Множитель преобразования пикселей в сантиметры
-    PIXEL_TO_CM = 0.002
-    COLUMNS_NAMES = 'id;area;RGB;area_defect'
+    PIXEL_TO_CM = 0.07
+    COLUMNS_NAMES = 'id;area_cm;RGB;area_defect_cm'
     aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_50)
     parameters = cv2.aruco.DetectorParameters_create()
 
-    def __init__(self, srcImg=None, srcVideo=None, camera=0, ratio=1.0):
+    def __init__(self, srcImg=None, srcVideo=None, camera=0, ratio=1.0, img=None):
         """
 
         :param srcImg: Путь до изображения
@@ -25,7 +25,9 @@ class ImageProcessor:
         :param ratio: Множитель изменения входящего изображения (можно использовать для оптимизации)
         """
         self.ratio = ratio
-        if srcImg:
+        if img:
+            self.img = img
+        elif srcImg:
             self.img = cv2.imread(srcImg)
             (w, h, c) = self.img.shape
             self.img = cv2.resize(self.img, (int(h * ratio), int(w * ratio)))
@@ -46,25 +48,28 @@ class ImageProcessor:
         self.belt = self.frame.copy()
         # self.shifted = cv2.pyrMeanShiftFiltering(img, 21, 51)
 
+    def getFrame(self):
+        return self.frame
+
     def aruco_marker(self):
-        self.belt = self.frame.copy()
         cnt, _, _ = cv2.aruco.detectMarkers(self.belt, self.aruco_dict, parameters=self.parameters)
         int_corners = np.int0(cnt)
         cv2.polylines(self.belt, int_corners, True, (0, 255, 0), 2)
-        aruco_perimeter = cv2.arcLength(cnt[0], True)
-        pixel_cm_ratio = 20 / aruco_perimeter
-        (x, y), (w, h), angle = cv2.minAreaRect(cnt[0])
-        cv2.putText(self.belt, "Width {} cm".format(round(w * pixel_cm_ratio, 1)),
-                    (int(x - 80), int(y - 20)),
-                    5, 1, (250, 0, 250), 1)
-        cv2.putText(self.belt, "Height {} cm".format(round(h * pixel_cm_ratio, 1)),
-                    (int(x - 80), int(y)),
-                    5, 1, (250, 0, 250), 1)
-        self.PIXEL_TO_CM = pixel_cm_ratio
-        mask_image = cv2.drawContours(np.zeros(self.img.shape[:2], np.uint8), int_corners, -1, 255, -1)
-        border_points = np.array(np.where(mask_image == 255)).transpose()
-        for point in border_points:
-            self.img[point[0], point[1]] = [255, 255, 255]
+        if len(cnt) != 0:
+            aruco_perimeter = cv2.arcLength(cnt[0], True)
+            pixel_cm_ratio = 20 / aruco_perimeter
+            (x, y), (w, h), angle = cv2.minAreaRect(cnt[0])
+            cv2.putText(self.belt, "Width {} cm".format(round(w * pixel_cm_ratio, 1)),
+                        (int(x - 80), int(y - 20)),
+                        5, 1, (250, 0, 250), 1)
+            cv2.putText(self.belt, "Height {} cm".format(round(h * pixel_cm_ratio, 1)),
+                        (int(x - 80), int(y)),
+                        5, 1, (250, 0, 250), 1)
+            self.PIXEL_TO_CM = pixel_cm_ratio
+            mask_image = cv2.drawContours(np.zeros(self.img.shape[:2], np.uint8), int_corners, -1, 255, -1)
+            border_points = np.array(np.where(mask_image == 255)).transpose()
+            for point in border_points:
+                self.img[point[0], point[1]] = [255, 255, 255]
 
     def update_frame(self):
         """
@@ -90,14 +95,17 @@ class ImageProcessor:
         # img = img[303:746, 427:1297]
         # img = img[76:326, 17:691]
 
-    def showAll(self):
+    def showAll(self, frame=True, belt=True, threshold=True):
         """
         Метод вывода информационных окон
         :return: None
         """
-        cv2.imshow("Frame", self.frame)
-        cv2.imshow("belt", self.belt)
-        cv2.imshow("threshold", self.threshold)
+        if frame:
+            cv2.imshow("Frame", self.frame)
+        if belt:
+            cv2.imshow("Orig", self.belt)
+        if threshold:
+            cv2.imshow("Threshold", self.threshold)
 
     def get_key(self, num):
         """
@@ -153,6 +161,7 @@ class ImageProcessor:
         self.potato_id = 0
         self.potatoes = [self.COLUMNS_NAMES]
         self.frame = self.img.copy()
+        self.belt = self.img.copy()
         # self.belt = self.frame.copy()
         if icol is None:
             labels = self.watershed()
@@ -269,13 +278,14 @@ class ImageProcessor:
             # cv2.putText(self.frame, ('%02d%02d%02d' % mean[:3])[:self.COLOR_ACCURACY], (int(x1) - 50, int(y1) + 20),
             #             1, 6, (0, 255, 0), 6, cv2.LINE_AA)
             # (randrange(200), 255, randrange(200))
-            cv2.drawContours(self.frame, [cntr], 0, [255 - i for i in [int(x) for x in mean][0:3]], int(7 * self.ratio))
-            cv2.putText(self.frame, str(self.potato_id), (int(x1 - 40 * self.ratio), int(y1 + 33 * self.ratio)),
-                        3, 3.3 * self.ratio, (0, 255, 0), 1, cv2.LINE_AA)
+            tmpCof = self.frame.shape[0]/1300
+            cv2.drawContours(self.frame, [cntr], 0, [255 - i for i in [int(x) for x in mean][0:3]], int(7 * tmpCof))
+            cv2.putText(self.frame, str(self.potato_id), (int(x1 - 40 * tmpCof), int(y1 + 33 * tmpCof)),
+                        3, 3.3 * tmpCof, (0, 255, 0), 1, cv2.LINE_AA)
             # cv2.putText(frame, str([round(i) for i in mean[:3]]), (x, y), 1, 1.2, (0, 255, 0), 2, cv2.LINE_AA)
             self.potato_id += 1
         else:
-            cv2.putText(self.belt, str('Err'), (int(x1) - 10, int(y1)), 1, 6, (0, 255, 0), 6, cv2.LINE_AA)
+            cv2.putText(self.belt, str('x'), (int(x1) - 10, int(y1)), 1, 6, (0, 255, 0), 6, cv2.LINE_AA)
 
     def ellipse_deviation(self, cntr):
         """
@@ -311,6 +321,7 @@ if __name__ == '__main__':
     # Создание объекта класса анализатора фото
     # 'data/5.jpg', 'data/1.mp4'
     imgAnalyzer = ImageProcessor(srcImg='data/5.jpg', ratio=0.3)
+    # imgAnalyzer = ImageProcessor(camera=0, ratio=1)
     imgAnalyzer.aruco_marker()
     num = 0
     key = 0

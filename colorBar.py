@@ -66,14 +66,14 @@ def coords(event, x, y, flags, param):
 
 
 if __name__ == '__main__':
-    cap = cv2.VideoCapture(0)
+    # cap = cv2.VideoCapture(0)
 
     while True:
 
-        _, img = cap.read()
-        # img = cv2.imread('data/5.jpg')
-        # (w, h, c) = img.shape
-        # img = cv2.resize(img, (int(h * 0.7), int(w * 0.7)))
+        # _, img = cap.read()
+        img = cv2.imread('data/5.jpg')
+        (w, h, c) = img.shape
+        img = cv2.resize(img, (int(h * 0.3), int(w * 0.3)))
 
         frame = img.copy()
 
@@ -86,8 +86,10 @@ if __name__ == '__main__':
         threshold = cv2.medianBlur(threshold, getBlur())
         # threshold = 255 - threshold
 
-        cnts, _ = cv2.findContours(threshold, cv2.RETR_EXTERNAL,
-                                   cv2.CHAIN_APPROX_SIMPLE)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        mask = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 17, 23)
+
+        cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         for cnt in cnts:
             if len(cnt) < 50:
