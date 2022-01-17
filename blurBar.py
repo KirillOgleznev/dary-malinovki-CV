@@ -1,7 +1,5 @@
 import cv2
 import numpy as np
-from matplotlib import pyplot as plt
-from sklearn.mixture import GaussianMixture
 
 icol = (20, 5, 20)
 

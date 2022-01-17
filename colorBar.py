@@ -2,9 +2,6 @@ import time
 
 from cv2 import cv2
 import numpy as np
-import skimage.segmentation
-from matplotlib import pyplot as plt
-from skimage.color import label2rgb
 
 # from blurBar import getBlur as qwe
 

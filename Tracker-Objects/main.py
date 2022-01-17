@@ -1,12 +1,6 @@
-# import the necessary packages
-from imutils.video import VideoStream
-from imutils.video import FPS
 from CentroidTracker import CentroidTracker
 from TrackableObject import TrackableObject
 import numpy as np
-import argparse
-import imutils
-import time
 
 from cv2 import cv2
 
@@ -28,7 +22,6 @@ totalFrames = 0
 totalDown = 0
 totalUp = 0
 # start the frames per second throughput estimator
-fps = FPS().start()
 cap = cv2.VideoCapture(0)
 # loop over frames from the video stream
 report = []
@@ -156,13 +149,11 @@ while True:
     # increment the total number of frames processed thus far and
     # then update the FPS counter
     totalFrames += 1
-    fps.update()
 
 # stop the timer and display FPS information
 f = open('table.csv', 'w')
 for i in report:
     f.write(str(i) + '\n')
 f.close()
-fps.stop()
 # close any open windows
 cv2.destroyAllWindows()

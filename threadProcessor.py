@@ -1,11 +1,4 @@
-from skimage.feature import peak_local_max
-from skimage.segmentation import watershed
-from scipy import ndimage
 from cv2 import cv2
-
-import numpy as np
-
-from colorBar import getColor, getBlur, getWatershedSens
 
 
 class ThreadProcessor:

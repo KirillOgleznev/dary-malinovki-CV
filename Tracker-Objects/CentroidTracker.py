@@ -2,8 +2,6 @@
 from scipy.spatial import distance as dist
 from collections import OrderedDict
 import numpy as np
-import argparse
-import time
 from cv2 import cv2
 
 
