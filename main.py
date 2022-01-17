@@ -3,7 +3,7 @@ import csv
 from cv2 import cv2
 import sys
 from PyQt5.QtWidgets import QTableView, QDialog, QWidget, QLabel, QApplication, QPushButton, QVBoxLayout
-from PyQt5.QtCore import QThread, Qt, pyqtSignal, pyqtSlot, QSize
+from PyQt5.QtCore import QThread, Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QStandardItemModel, QStandardItem, QImage, QPixmap
 
 from imageProcessor import ImageProcessor
