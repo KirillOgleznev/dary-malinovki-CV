@@ -1,5 +1,6 @@
 __pycache__
 venv
 .idea
+table.csv
 *.csv
 *.mp4

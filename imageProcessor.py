@@ -320,7 +320,7 @@ class ImageProcessor:
 if __name__ == '__main__':
     # Создание объекта класса анализатора фото
     # 'data/5.jpg', 'data/1.mp4'
-    imgAnalyzer = ImageProcessor(srcImg='data/5.jpg', ratio=0.3)
+    imgAnalyzer = ImageProcessor(srcVideo='data/1.mp4', ratio=0.3)
     # imgAnalyzer = ImageProcessor(camera=0, ratio=1)
     imgAnalyzer.aruco_marker()
     num = 0
