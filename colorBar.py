@@ -19,8 +19,8 @@ from skimage.color import label2rgb
 # icol = (1, 3, 66, 94, 118, 255, 1)  # 666.jpg
 # icol = (0, 0, 3, 28, 255, 255, 50)  # video.jpg
 # icol = (79, 37, 36, 136, 155, 255, 2, 26)  # 3.jpg
-# icol = (0, 0, 33, 102, 85, 255, 2, 20)  # 5.jpg
-icol = (56, 60, 80, 103, 255, 255, 0, 20)  # 5.jpg0
+icol = (0, 0, 33, 102, 85, 255, 2, 20)  # 5.jpg
+# icol = (56, 60, 80, 103, 255, 255, 0, 20)  # camera
 
 
 def nothing(x):

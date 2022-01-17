@@ -8,7 +8,8 @@ from imageProcessor import ImageProcessor
 if __name__ == '__main__':
     # Создание объекта класса анализатора фото
     # 'data/5.jpg', 'data/1.mp4'
-    imgAnalyzer = ImageProcessor(srcImg='data/6.jpg', ratio=0.3)
+    imgAnalyzer = ImageProcessor(srcImg='data/5.jpg', ratio=0.3)
+    imgAnalyzer.aruco_marker()
     num = 0
     key = 0
 

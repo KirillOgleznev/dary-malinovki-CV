@@ -1,4 +1,3 @@
-from random import randrange
 from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
 from scipy import ndimage
@@ -13,9 +12,11 @@ class ImageProcessor:
     COLOR_ACCURACY = -5
     # Множитель преобразования пикселей в сантиметры
     PIXEL_TO_CM = 0.002
-    COLUMNS_NAMES = 'id;RGB;area_defect'
+    COLUMNS_NAMES = 'id;area;RGB;area_defect'
+    aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_50)
+    parameters = cv2.aruco.DetectorParameters_create()
 
-    def __init__(self, srcImg=None, srcVideo=None, camera=0, ratio=1):
+    def __init__(self, srcImg=None, srcVideo=None, camera=0, ratio=1.0):
         """
 
         :param srcImg: Путь до изображения
@@ -42,8 +43,28 @@ class ImageProcessor:
         self.potatoes = []
         self.hsv_belt = None
         self.threshold = None
-        self.belt = None
+        self.belt = self.frame.copy()
         # self.shifted = cv2.pyrMeanShiftFiltering(img, 21, 51)
+
+    def aruco_marker(self):
+        self.belt = self.frame.copy()
+        cnt, _, _ = cv2.aruco.detectMarkers(self.belt, self.aruco_dict, parameters=self.parameters)
+        int_corners = np.int0(cnt)
+        cv2.polylines(self.belt, int_corners, True, (0, 255, 0), 2)
+        aruco_perimeter = cv2.arcLength(cnt[0], True)
+        pixel_cm_ratio = 20 / aruco_perimeter
+        (x, y), (w, h), angle = cv2.minAreaRect(cnt[0])
+        cv2.putText(self.belt, "Width {} cm".format(round(w * pixel_cm_ratio, 1)),
+                    (int(x - 80), int(y - 20)),
+                    5, 1, (250, 0, 250), 1)
+        cv2.putText(self.belt, "Height {} cm".format(round(h * pixel_cm_ratio, 1)),
+                    (int(x - 80), int(y)),
+                    5, 1, (250, 0, 250), 1)
+        self.PIXEL_TO_CM = pixel_cm_ratio
+        mask_image = cv2.drawContours(np.zeros(self.img.shape[:2], np.uint8), int_corners, -1, 255, -1)
+        border_points = np.array(np.where(mask_image == 255)).transpose()
+        for point in border_points:
+            self.img[point[0], point[1]] = [255, 255, 255]
 
     def update_frame(self):
         """
@@ -87,18 +108,25 @@ class ImageProcessor:
         key = cv2.waitKey(num)
         return key
 
-    def watershed(self):
+    def watershed(self, icol=None):
         """
         Алгоритм сегментации близко находящихся клубней
         :return: Разделенный контур
         """
         RGB_belt = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
         self.hsv_belt = cv2.cvtColor(RGB_belt, cv2.COLOR_BGR2HSV)
-        lowHue, lowSat, lowVal, highHue, highSat, highVal = getColor()
+        if icol is None:
+            lowHue, lowSat, lowVal, highHue, highSat, highVal = getColor()
+            blur = getBlur()
+            watershedSens = getWatershedSens()
+        else:
+            lowHue, lowSat, lowVal, highHue, highSat, highVal = icol[:6]
+            blur = ((icol[6] // 2) * 2) + 1
+            watershedSens = icol[7]
         colorLow = np.array([lowHue, lowSat, lowVal])
         colorHigh = np.array([highHue, highSat, highVal])
         self.threshold = cv2.inRange(self.hsv_belt, colorLow, colorHigh)
-        self.threshold = cv2.medianBlur(self.threshold, getBlur())
+        self.threshold = cv2.medianBlur(self.threshold, blur)
         self.threshold = 255 - self.threshold
         # closing = cv2.morphologyEx(self.threshold, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8), iterations=1)
         # D = cv2.distanceTransform(self.threshold, cv2.DIST_L1, 3)
@@ -106,17 +134,17 @@ class ImageProcessor:
         D = ndimage.distance_transform_edt(self.threshold)
         # cv2.imwrite('png.png', D)
 
-        # localMax = peak_local_max(D, indices=False, min_distance=getWatershedSens(),
+        # localMax = peak_local_max(D, indices=False, min_distance=watershedSens,
         #                           labels=self.threshold)
         # markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
-        coords = peak_local_max(D, min_distance=getWatershedSens(), labels=self.threshold)
+        coords = peak_local_max(D, min_distance=watershedSens, labels=self.threshold)
         mask = np.zeros(D.shape, dtype=bool)
         mask[tuple(coords.T)] = True
         markers, _ = ndimage.label(mask)
 
         return watershed(-D, markers, mask=self.threshold)
 
-    def find_and_draw_contours(self):
+    def find_and_draw_contours(self, icol=None):
         """
         Метод находит контуры картофеля и рисует их на окне "Frame"
         :return: None
@@ -125,8 +153,11 @@ class ImageProcessor:
         self.potato_id = 0
         self.potatoes = [self.COLUMNS_NAMES]
         self.frame = self.img.copy()
-        self.belt = self.frame.copy()
-        labels = self.watershed()
+        # self.belt = self.frame.copy()
+        if icol is None:
+            labels = self.watershed()
+        else:
+            labels = self.watershed(icol)
         for label in np.unique(labels):
             if label == 0:
                 continue
@@ -232,6 +263,7 @@ class ImageProcessor:
             maskTmp = cv2.drawContours(np.zeros(self.img.shape[:2], np.uint8), [cntr], -1, 255, -1)
             mean = cv2.mean(self.img, mask=maskTmp)
             self.potatoes.append(str(self.potato_id) + ';' +
+                                 str(round(self.PIXEL_TO_CM ** 2 * cv2.contourArea(cntr))) + ';' +
                                  str([int(x) for x in mean][2:: -1]) + ';' +
                                  str(self.ellipse_deviation(cntr)))
             # cv2.putText(self.frame, ('%02d%02d%02d' % mean[:3])[:self.COLOR_ACCURACY], (int(x1) - 50, int(y1) + 20),
@@ -261,7 +293,7 @@ class ImageProcessor:
         areaCnt = int(cv2.contourArea(cntr))
         areaEllipse = int(np.pi / 4 * ellipse[1][0] * ellipse[1][1])
         # areaHull = int(cv2.contourArea(hull))
-        return int((areaEllipse - areaCnt) * self.PIXEL_TO_CM)
+        return int((areaEllipse - areaCnt) * self.PIXEL_TO_CM ** 2)
 
     def create_report(self):
         """
@@ -273,3 +305,22 @@ class ImageProcessor:
         for i in self.potatoes:
             f.write(str(i) + '\n')
         f.close()
+
+
+if __name__ == '__main__':
+    # Создание объекта класса анализатора фото
+    # 'data/5.jpg', 'data/1.mp4'
+    imgAnalyzer = ImageProcessor(srcImg='data/5.jpg', ratio=0.3)
+    imgAnalyzer.aruco_marker()
+    num = 0
+    key = 0
+
+    # Выход при нажалии Esc
+    while key != 27:
+        imgAnalyzer.find_and_draw_contours((0, 0, 33, 102, 85, 255, 2, 20))
+        imgAnalyzer.resize(1)
+        imgAnalyzer.showAll()
+        imgAnalyzer.create_report()
+
+        key = imgAnalyzer.get_key(num)
+        num = 1
