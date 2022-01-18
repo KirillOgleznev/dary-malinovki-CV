@@ -22,7 +22,7 @@ totalFrames = 0
 totalDown = 0
 totalUp = 0
 # start the frames per second throughput estimator
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)
 # loop over frames from the video stream
 report = []
 while True:

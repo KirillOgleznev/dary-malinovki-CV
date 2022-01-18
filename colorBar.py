@@ -16,8 +16,10 @@ import numpy as np
 # icol = (1, 3, 66, 94, 118, 255, 1)  # 666.jpg
 # icol = (0, 0, 3, 28, 255, 255, 50)  # video.jpg
 # icol = (79, 37, 36, 136, 155, 255, 2, 26)  # 3.jpg
-icol = (0, 0, 33, 102, 85, 255, 2, 20)  # 5.jpg
+# icol = (0, 0, 33, 102, 85, 255, 2, 20)  # 5.jpg
 # icol = (56, 60, 80, 103, 255, 255, 0, 20)  # camera
+# icol = (0, 0, 58, 135, 116, 205, 2, 37)  # camera 1
+icol = (0, 100, 100, 27, 255, 255, 2, 37)  # camera 1 inv
 
 
 def nothing(x):
@@ -63,14 +65,14 @@ def coords(event, x, y, flags, param):
 
 
 if __name__ == '__main__':
-    # cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(1)
 
     while True:
 
-        # _, img = cap.read()
-        img = cv2.imread('data/5.jpg')
+        _, img = cap.read()
+        # img = cv2.imread('data/5.jpg')
         (w, h, c) = img.shape
-        img = cv2.resize(img, (int(h * 0.3), int(w * 0.3)))
+        img = cv2.resize(img, (int(h * 1), int(w * 1)))
 
         frame = img.copy()
 

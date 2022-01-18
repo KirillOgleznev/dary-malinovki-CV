@@ -11,8 +11,8 @@ from colorBar import getColor, getBlur, getWatershedSens
 class ImageProcessor:
     COLOR_ACCURACY = -5
     # Множитель преобразования пикселей в сантиметры
-    PIXEL_TO_CM = 0.07
-    COLUMNS_NAMES = 'id;area_cm;RGB;area_defect_cm'
+    PIXEL_TO_CM = 0.037
+    COLUMNS_NAMES = 'id;area_cm;RGB;ellipsoid_shape'
     aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_50)
     parameters = cv2.aruco.DetectorParameters_create()
 
@@ -52,12 +52,12 @@ class ImageProcessor:
         return self.frame
 
     def aruco_marker(self):
-        cnt, _, _ = cv2.aruco.detectMarkers(self.belt, self.aruco_dict, parameters=self.parameters)
+        cnt, _, _ = cv2.aruco.detectMarkers(self.img, self.aruco_dict, parameters=self.parameters)
         int_corners = np.int0(cnt)
         cv2.polylines(self.belt, int_corners, True, (0, 255, 0), 2)
         if len(cnt) != 0:
             aruco_perimeter = cv2.arcLength(cnt[0], True)
-            pixel_cm_ratio = 20 / aruco_perimeter
+            pixel_cm_ratio = 40 / aruco_perimeter
             (x, y), (w, h), angle = cv2.minAreaRect(cnt[0])
             cv2.putText(self.belt, "Width {} cm".format(round(w * pixel_cm_ratio, 1)),
                         (int(x - 80), int(y - 20)),
@@ -69,7 +69,7 @@ class ImageProcessor:
             mask_image = cv2.drawContours(np.zeros(self.img.shape[:2], np.uint8), int_corners, -1, 255, -1)
             border_points = np.array(np.where(mask_image == 255)).transpose()
             for point in border_points:
-                self.img[point[0], point[1]] = [255, 255, 255]
+                self.img[point[0], point[1]] = [50, 150, 50]
 
     def update_frame(self):
         """
@@ -181,8 +181,6 @@ class ImageProcessor:
                 continue
             self.draw_contour(cnt[:, 0])
             # cv2.drawContours(frame, cnts, 0, (randrange(255), randrange(255), randrange(255)), 2)
-        if self.cap:
-            self.update_frame()
 
     def draw_contour(self, cntr):
         """
@@ -271,21 +269,33 @@ class ImageProcessor:
 
             maskTmp = cv2.drawContours(np.zeros(self.img.shape[:2], np.uint8), [cntr], -1, 255, -1)
             mean = cv2.mean(self.img, mask=maskTmp)
+            class_p, color_cnt = self.classifier_potatoes([int(x) for x in mean][2:: -1])
             self.potatoes.append(str(self.potato_id) + ';' +
                                  str(round(self.PIXEL_TO_CM ** 2 * cv2.contourArea(cntr))) + ';' +
-                                 str([int(x) for x in mean][2:: -1]) + ';' +
+                                 str([int(x) for x in mean][2:: -1]) + ' ' + class_p + ';' +
                                  str(self.ellipse_deviation(cntr)))
             # cv2.putText(self.frame, ('%02d%02d%02d' % mean[:3])[:self.COLOR_ACCURACY], (int(x1) - 50, int(y1) + 20),
             #             1, 6, (0, 255, 0), 6, cv2.LINE_AA)
             # (randrange(200), 255, randrange(200))
-            tmpCof = self.frame.shape[0]/1300
-            cv2.drawContours(self.frame, [cntr], 0, [255 - i for i in [int(x) for x in mean][0:3]], int(7 * tmpCof))
+            tmpCof = self.frame.shape[0] / 1300
+            # [255 - i for i in [int(x) for x in mean][0:3]]
+            cv2.drawContours(self.frame, [cntr], 0, color_cnt, int(7 * tmpCof))
             cv2.putText(self.frame, str(self.potato_id), (int(x1 - 40 * tmpCof), int(y1 + 33 * tmpCof)),
                         3, 3.3 * tmpCof, (0, 255, 0), 1, cv2.LINE_AA)
             # cv2.putText(frame, str([round(i) for i in mean[:3]]), (x, y), 1, 1.2, (0, 255, 0), 2, cv2.LINE_AA)
             self.potato_id += 1
         else:
             cv2.putText(self.belt, str('x'), (int(x1) - 10, int(y1)), 1, 6, (0, 255, 0), 6, cv2.LINE_AA)
+
+    @staticmethod
+    def classifier_potatoes(color):
+        [R, G, B] = color
+        if R > 120:
+            return 'Красня', [0, 0, 255]
+        elif G > 120:
+            return 'Зеленая', [0, 255, 0]
+        else:
+            return 'Белая', [255, 255, 255]
 
     def ellipse_deviation(self, cntr):
         """
@@ -303,7 +313,7 @@ class ImageProcessor:
         areaCnt = int(cv2.contourArea(cntr))
         areaEllipse = int(np.pi / 4 * ellipse[1][0] * ellipse[1][1])
         # areaHull = int(cv2.contourArea(hull))
-        return int((areaEllipse - areaCnt) * self.PIXEL_TO_CM ** 2)
+        return int((areaCnt / areaEllipse) * 100)
 
     def create_report(self):
         """

@@ -47,9 +47,10 @@ class Thread(QThread):
     changePixmap = pyqtSignal(QImage, list)
 
     def run(self):
-        imgAnalyzer = ImageProcessor(camera=0, ratio=1)
-        imgAnalyzer.aruco_marker()
+        imgAnalyzer = ImageProcessor(camera=1, ratio=1)
         while True:
+            imgAnalyzer.update_frame()
+            imgAnalyzer.aruco_marker()
             imgAnalyzer.find_and_draw_contours()
             imgAnalyzer.showAll(frame=False)
             cv2.waitKey(1)
