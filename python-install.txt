@@ -1,7 +1,3 @@
 python -m venv venv
 source venv/bin/activate
-pip install -U pip
-pip install opencv-python
-pip install PyQt5
-pip install -U scikit-image
-pip install opencv-contrib-python
+pip install -r requirements.txt

@@ -1,0 +1,17 @@
+imageio==2.14.0
+networkx==2.6.3
+numpy==1.22.1
+opencv-contrib-python==4.5.5.62
+opencv-python==4.5.5.62
+packaging==21.3
+Pillow==9.0.0
+pymongo==3.0.1
+pyparsing==3.0.7
+PyQt5==5.15.6
+PyQt5-Qt5==5.15.2
+PyQt5-sip==12.9.0
+PyQt5-stubs==5.15.2.0
+PyWavelets==1.2.0
+scikit-image==0.19.1
+scipy==1.7.3
+tifffile==2021.11.2

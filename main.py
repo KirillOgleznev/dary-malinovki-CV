@@ -1,5 +1,3 @@
-import csv
-
 from cv2 import cv2
 import sys
 from PyQt5.QtWidgets import QTableView, QDialog, QWidget, QLabel, QApplication, QPushButton, QVBoxLayout
@@ -52,8 +50,6 @@ class ClassDialog(QDialog):
         varieties = dict(Counter(tmp_varieties))
         weight_fraction = dict(Counter(tmp_weight_fraction))
         size_fraction = dict(Counter(tmp_size_fraction))
-        print(count, varieties, weight_fraction, size_fraction)
-
         new_record = {
             "count": count,
             "varieties": varieties,
@@ -62,8 +58,8 @@ class ClassDialog(QDialog):
         }
         try:
             test_collection.insert_one(new_record)
-        except:
-            print('Не удалось подключиться к БД')
+        except Exception as err:
+            print('Не удалось подключиться к БД (' + str(err.details['errmsg']) + ')')
 
     def createTable(self):
         for row in self.parent.potatoesList:
