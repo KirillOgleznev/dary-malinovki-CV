@@ -12,7 +12,8 @@ class ImageProcessor:
     COLOR_ACCURACY = -5
     # Множитель преобразования пикселей в сантиметры
     PIXEL_TO_CM = 0.037
-    COLUMNS_NAMES = 'id;area_cm;RGB;ellipsoid_shape'
+    COLUMNS_NAMES = ['id', 'area_cm', 'RGB', 'variety', 'ellipsoid_shape',
+                     'weight', 'weight_fraction', 'min_diameter_mm', 'size_fraction']
     aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_50)
     parameters = cv2.aruco.DetectorParameters_create()
 
@@ -27,6 +28,7 @@ class ImageProcessor:
         self.ratio = ratio
         if img:
             self.img = img
+            self.cap = None
         elif srcImg:
             self.img = cv2.imread(srcImg)
             (w, h, c) = self.img.shape
@@ -73,12 +75,13 @@ class ImageProcessor:
 
     def update_frame(self):
         """
-        Обновляет кадр (Только для видео)
-        :return: None
-        """
-        _, self.img = self.cap.read()
-        (w, h, c) = self.img.shape
-        self.img = cv2.resize(self.img, (int(h * self.ratio), int(w * self.ratio)))
+                Обновляет кадр (Только для видео)
+                :return: None
+                """
+        if self.cap:
+            _, self.img = self.cap.read()
+            (w, h, c) = self.img.shape
+            self.img = cv2.resize(self.img, (int(h * self.ratio), int(w * self.ratio)))
 
     def resize(self, num):
         """
@@ -269,11 +272,22 @@ class ImageProcessor:
 
             maskTmp = cv2.drawContours(np.zeros(self.img.shape[:2], np.uint8), [cntr], -1, 255, -1)
             mean = cv2.mean(self.img, mask=maskTmp)
-            class_p, color_cnt = self.classifier_potatoes([int(x) for x in mean][2:: -1])
-            self.potatoes.append(str(self.potato_id) + ';' +
-                                 str(round(self.PIXEL_TO_CM ** 2 * cv2.contourArea(cntr))) + ';' +
-                                 str([int(x) for x in mean][2:: -1]) + ' ' + class_p + ';' +
-                                 str(self.ellipse_deviation(cntr)))
+            class_p, color_cnt = self.classifier_potatoes([round(x) for x in mean][2:: -1])
+            area = round(self.PIXEL_TO_CM ** 2 * cv2.contourArea(cntr))
+            rect = cv2.minAreaRect(cntr)
+            fraction = self.fraction_classifier(round(min(rect[1][0], rect[1][1])))
+            weight = area * 2.5
+            weight_fraction = self.weight_classifier(weight)
+            self.potatoes.append([str(self.potato_id),
+                                 str(area),
+                                 str([round(x) for x in mean][2:: -1]),
+                                 class_p,
+                                 str(self.ellipse_deviation(cntr)),
+                                 str(weight),
+                                 str(weight_fraction),
+                                 str(round(min(rect[1][0], rect[1][1]))),
+                                 str(fraction)])
+
             # cv2.putText(self.frame, ('%02d%02d%02d' % mean[:3])[:self.COLOR_ACCURACY], (int(x1) - 50, int(y1) + 20),
             #             1, 6, (0, 255, 0), 6, cv2.LINE_AA)
             # (randrange(200), 255, randrange(200))
@@ -288,6 +302,46 @@ class ImageProcessor:
             cv2.putText(self.belt, str('x'), (int(x1) - 10, int(y1)), 1, 6, (0, 255, 0), 6, cv2.LINE_AA)
 
     @staticmethod
+    def weight_classifier(weight):
+        if weight > 140:
+            return 150
+        elif weight > 120:
+            return 130
+        elif weight > 100:
+            return 110
+        elif weight > 80:
+            return 90
+        elif weight > 60:
+            return 70
+        elif weight > 40:
+            return 50
+        elif weight > 20:
+            return 30
+        else:
+            return 10
+
+    @staticmethod
+    def fraction_classifier(min_diameter):
+        if min_diameter > 80:
+            return 80
+        elif min_diameter > 70:
+            return 75
+        elif min_diameter > 60:
+            return 65
+        elif min_diameter > 50:
+            return 55
+        elif min_diameter > 40:
+            return 45
+        elif min_diameter > 30:
+            return 35
+        elif min_diameter > 20:
+            return 25
+        elif min_diameter > 10:
+            return 15
+        else:
+            return 5
+
+    @staticmethod
     def classifier_potatoes(color):
         [R, G, B] = color
         if R > 120:
@@ -297,7 +351,8 @@ class ImageProcessor:
         else:
             return 'Белая', [255, 255, 255]
 
-    def ellipse_deviation(self, cntr):
+    @staticmethod
+    def ellipse_deviation(cntr):
         """
         Метод вычисляет отклонение формы клубня от эллипсоидной формы
         :param cntr: Контур анализируемого клубня
@@ -310,27 +365,28 @@ class ImageProcessor:
         if len(hull) < 5:
             return -1
         ellipse = cv2.fitEllipse(hull)
-        areaCnt = int(cv2.contourArea(cntr))
-        areaEllipse = int(np.pi / 4 * ellipse[1][0] * ellipse[1][1])
+        areaCnt = round(cv2.contourArea(cntr))
+        areaEllipse = round(np.pi / 4 * ellipse[1][0] * ellipse[1][1])
         # areaHull = int(cv2.contourArea(hull))
-        return int((areaCnt / areaEllipse) * 100)
+        return round((areaCnt / areaEllipse) * 100)
 
     def create_report(self):
         """
         Метод сохраняет данные о клубнях в таблицу table.csv
         :return: None
         """
-        # print(self.potatoes)
-        f = open('table.csv', 'w')
-        for i in self.potatoes:
-            f.write(str(i) + '\n')
-        f.close()
+        # # print(self.potatoes)
+        # f = open('table.csv', 'w')
+        # for i in self.potatoes:
+        #     f.write(str(i) + '\n')
+        # f.close()
+        pass
 
 
 if __name__ == '__main__':
     # Создание объекта класса анализатора фото
     # 'data/5.jpg', 'data/1.mp4'
-    imgAnalyzer = ImageProcessor(srcVideo='data/1.mp4', ratio=0.3)
+    imgAnalyzer = ImageProcessor(srcImg='data/7.jpg', ratio=0.5)
     # imgAnalyzer = ImageProcessor(camera=0, ratio=1)
     imgAnalyzer.aruco_marker()
     num = 0
@@ -338,10 +394,10 @@ if __name__ == '__main__':
 
     # Выход при нажалии Esc
     while key != 27:
-        imgAnalyzer.find_and_draw_contours((0, 0, 33, 102, 85, 255, 2, 20))
+        # (0, 0, 33, 102, 85, 255, 2, 20) # 5.jpg
+        imgAnalyzer.find_and_draw_contours()
         imgAnalyzer.resize(1)
         imgAnalyzer.showAll()
-        imgAnalyzer.create_report()
 
         key = imgAnalyzer.get_key(num)
         num = 1

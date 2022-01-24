@@ -7,6 +7,12 @@ from PyQt5.QtCore import QThread, Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QStandardItemModel, QStandardItem, QImage, QPixmap
 
 from imageProcessor import ImageProcessor
+from collections import Counter
+from pymongo import MongoClient
+
+password = 'secretPassword'
+connect = MongoClient('mongodb://Admin:' + password + '@140.238.219.37:27017')
+test_collection = connect['dm_db']['test']
 
 
 class ClassDialog(QDialog):
@@ -14,12 +20,12 @@ class ClassDialog(QDialog):
         super().__init__()
         self.title = 'Table'
         self.setWindowTitle("Dialog")
-        self.setGeometry(100, 100, 600, 570)
+        self.setGeometry(100, 100, 1200, 570)
 
         self.verticalLayout = QVBoxLayout(self)
         self.pushButton = QPushButton(self)
         self.pushButton.clicked.connect(self.btnClosed)
-        self.pushButton.setText("Close Dialog")
+        self.pushButton.setText("Отправить в БД")
         self.model = QStandardItemModel(self)
         self.tableView = QTableView(self)
         self.tableView.setModel(self.model)
@@ -28,16 +34,41 @@ class ClassDialog(QDialog):
         self.verticalLayout.addWidget(self.tableView)
         self.verticalLayout.addWidget(self.pushButton)
         self.parent = parent
-        self.loadCsv('table.csv')
+        self.createTable()
 
     def btnClosed(self):
-        self.close()
+        listPotatoes = self.parent.potatoesList[1:]
+        count = len(listPotatoes)
+        ugly_shape = 0
+        tmp_varieties = []
+        tmp_weight_fraction = []
+        tmp_size_fraction = []
+        for i in listPotatoes:
+            tmp_varieties.append(i[3])
+            tmp_weight_fraction.append(i[6])
+            tmp_size_fraction.append(i[8])
+            if int(i[4]) < 85:
+                ugly_shape += 1
+        varieties = dict(Counter(tmp_varieties))
+        weight_fraction = dict(Counter(tmp_weight_fraction))
+        size_fraction = dict(Counter(tmp_size_fraction))
+        print(count, varieties, weight_fraction, size_fraction)
 
-    def loadCsv(self, fileName):
-        with open(fileName, "r") as fileInput:
-            for row in csv.reader(fileInput, delimiter=';'):
-                items = [QStandardItem(field)for field in row]
-                self.model.appendRow(items)
+        new_record = {
+            "count": count,
+            "varieties": varieties,
+            "weight_fraction": weight_fraction,
+            "size_fraction": size_fraction,
+        }
+        try:
+            test_collection.insert_one(new_record)
+        except:
+            print('Не удалось подключиться к БД')
+
+    def createTable(self):
+        for row in self.parent.potatoesList:
+            items = [QStandardItem(field) for field in row]
+            self.model.appendRow(items)
 
     def closeEvent(self, event):
         self.parent.flagFrameUpdate = True
@@ -47,7 +78,7 @@ class Thread(QThread):
     changePixmap = pyqtSignal(QImage, list)
 
     def run(self):
-        imgAnalyzer = ImageProcessor(camera=1, ratio=1)
+        imgAnalyzer = ImageProcessor(srcImg='data/5.jpg', ratio=0.5)
         while True:
             imgAnalyzer.update_frame()
             imgAnalyzer.aruco_marker()
