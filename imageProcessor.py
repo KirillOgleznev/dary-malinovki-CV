@@ -1,3 +1,5 @@
+import time
+
 from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
 from scipy import ndimage
@@ -5,7 +7,8 @@ from cv2 import cv2
 
 import numpy as np
 
-from colorBar import getColor, getBlur, getWatershedSens
+# from colorBar import getColor, getBlur, getWatershedSens
+from colorBar import TrackingBar
 
 
 class ImageProcessor:
@@ -127,10 +130,11 @@ class ImageProcessor:
         RGB_belt = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
         self.hsv_belt = cv2.cvtColor(RGB_belt, cv2.COLOR_BGR2HSV)
         if icol is None:
-            lowHue, lowSat, lowVal, highHue, highSat, highVal = getColor()
-            blur = getBlur()
-            watershedSens = getWatershedSens()
+            lowHue, lowSat, lowVal, highHue, highSat, highVal = TrackingBar.getColor()
+            blur = TrackingBar.getBlur()  # todo fix
+            watershedSens = TrackingBar.getWatershedSens()
         else:
+            from colorBar import icol
             lowHue, lowSat, lowVal, highHue, highSat, highVal = icol[:6]
             blur = ((icol[6] // 2) * 2) + 1
             watershedSens = icol[7]
@@ -279,14 +283,14 @@ class ImageProcessor:
             weight = area * 2.5
             weight_fraction = self.weight_classifier(weight)
             self.potatoes.append([str(self.potato_id),
-                                 str(area),
-                                 str([round(x) for x in mean][2:: -1]),
-                                 class_p,
-                                 str(self.ellipse_deviation(cntr)),
-                                 str(weight),
-                                 str(weight_fraction),
-                                 str(round(min(rect[1][0], rect[1][1]))),
-                                 str(fraction)])
+                                  str(area),
+                                  str([round(x) for x in mean][2:: -1]),
+                                  class_p,
+                                  str(self.ellipse_deviation(cntr)),
+                                  str(weight),
+                                  str(weight_fraction),
+                                  str(round(min(rect[1][0], rect[1][1]))),
+                                  str(fraction)])
 
             # cv2.putText(self.frame, ('%02d%02d%02d' % mean[:3])[:self.COLOR_ACCURACY], (int(x1) - 50, int(y1) + 20),
             #             1, 6, (0, 255, 0), 6, cv2.LINE_AA)
@@ -344,9 +348,9 @@ class ImageProcessor:
     @staticmethod
     def classifier_potatoes(color):
         [R, G, B] = color
-        if R > 120:
+        if R > 190:
             return 'Красня', [0, 0, 255]
-        elif G > 120:
+        elif G > 180:
             return 'Зеленая', [0, 255, 0]
         else:
             return 'Белая', [255, 255, 255]
