@@ -26,18 +26,18 @@ from PyQt5.QtGui import QImage, QPixmap
 
 # icol = (56, 60, 80, 103, 255, 255, 0, 20)  # camera
 # icol = (4, 54, 155, 22, 164, 207, 2, 37)  # camera 1
-icol = (0, 100, 100, 27, 255, 255, 2, 30)  # camera 1 inv
+icol = (0, 64, 0, 49, 255, 255, 2, 30)  # camera 1 inv
 
 
 class Thread(QThread):
     changePixmap = pyqtSignal(QImage, QImage, list)
     finished = pyqtSignal()
 
-    def __init__(self, parent, imageProcessor):
+    def __init__(self, parent):
         # self.parent = parent
         super().__init__(parent)
         self.flag = False
-        self.imageProcessor = imageProcessor
+        # self.imageProcessor = imageProcessor
 
     @staticmethod
     def nothing(x):
@@ -55,6 +55,7 @@ class Thread(QThread):
         cv2.createTrackbar("u_v", "Tracking", myIcol[5], 255, self.nothing)
         cv2.createTrackbar("blur", "Tracking", myIcol[6], 10, self.nothing)
         cv2.createTrackbar("ws_sens", "Tracking", myIcol[7], 300, self.nothing)
+        cap = cv2.VideoCapture(1)
         while not self.flag:
             cv2.waitKey(1)
             lowHue = cv2.getTrackbarPos("l_h", "Tracking")
@@ -72,7 +73,8 @@ class Thread(QThread):
             if not self.parent:
                 img = cv2.imread('data/5.jpg')
             else:
-                _, img = self.imageProcessor.cap.read()
+                # _, img = self.imageProcessor.cap.read()
+                _, img = cap.read()
 
                 pass
             # (w, h, c) = img.shape
@@ -135,7 +137,7 @@ class TrackingBar(QDialog):
         self.setLayout(self.gbox)
 
         # self.th = Thread(self, self.parent.imageProcessor)
-        self.th = Thread(self, self.parent.imageProcessor)
+        self.th = Thread(self)
         self.th.changePixmap.connect(self.setImage)
         self.th.finished.connect(self.final)
         self.th.start()

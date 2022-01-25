@@ -53,10 +53,12 @@ class ClassDialog(QDialog):
 
         color_mean = [0, 0, 0]
         for i in color_list:
-            color_mean[0] += i[0]
-            color_mean[1] += i[1]
-            color_mean[2] += i[2]
+            tmp =i[1:-1].split(',')
+            color_mean[0] += int(tmp[0])
+            color_mean[1] += int(tmp[1])
+            color_mean[2] += int(tmp[2])
         c_len = len(color_list)
+        print(color_mean)
         color_mean = [int(color_mean[0]/c_len),
                       int(color_mean[1]/c_len),
                       int(color_mean[2]/c_len)]
