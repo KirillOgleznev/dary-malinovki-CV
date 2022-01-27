@@ -26,7 +26,8 @@ from PyQt5.QtGui import QImage, QPixmap
 
 # icol = (56, 60, 80, 103, 255, 255, 0, 20)  # camera
 # icol = (4, 54, 155, 22, 164, 207, 2, 37)  # camera 1
-icol = (0, 64, 0, 49, 255, 255, 2, 30)  # camera 1 inv
+icol = (0, 89, 0, 11, 255, 255, 3, 30) # camera 1 inv
+# icol = (97, 5, 94, 132, 46, 255, 11, 120)
 
 
 class Thread(QThread):
@@ -70,8 +71,10 @@ class Thread(QThread):
             # self.changePixmap.emit([lowHue, lowSat, lowVal, highHue, highSat,
             #                         highVal, sens, blur])
 
-            if not self.parent:
-                img = cv2.imread('data/5.jpg')
+            # if not self.parent:
+            if not False:
+                # img = cv2.imread('data/8.jpg')
+                _, img = cap.read()
             else:
                 # _, img = self.imageProcessor.cap.read()
                 _, img = cap.read()
@@ -106,6 +109,8 @@ class Thread(QThread):
 
 
 class TrackingBar(QDialog):
+    icol = (0, 89, 0, 11, 255, 255, 3, 30)
+
     def __init__(self, parent):
         super().__init__()
         self.parent = parent

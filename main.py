@@ -96,6 +96,8 @@ class Thread(QThread):
         while True:
             imgAnalyzer.update_frame()
             imgAnalyzer.aruco_marker()
+            imgAnalyzer.qr_code_detector()
+
             from colorBar import icol
             imgAnalyzer.find_and_draw_contours(icol)
             # imgAnalyzer.showAll(frame=False)

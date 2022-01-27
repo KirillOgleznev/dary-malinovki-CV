@@ -14,7 +14,7 @@ from colorBar import TrackingBar
 class ImageProcessor:
     COLOR_ACCURACY = -5
     # Множитель преобразования пикселей в сантиметры
-    PIXEL_TO_CM = 0.037
+    PIXEL_TO_CM = 0.1029
     COLUMNS_NAMES = ['id', 'area_cm', 'RGB', 'variety', 'ellipsoid_shape',
                      'weight', 'weight_fraction', 'min_diameter_mm', 'size_fraction']
     aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_50)
@@ -28,6 +28,7 @@ class ImageProcessor:
         :param camera: Номер камеры подключенной к ПК
         :param ratio: Множитель изменения входящего изображения (можно использовать для оптимизации)
         """
+        self.pointsQR = []
         self.ratio = ratio
         if img:
             self.img = img
@@ -56,6 +57,29 @@ class ImageProcessor:
     def getFrame(self):
         return self.frame
 
+    def qr_code_detector(self):
+        self.pointsQR = []
+        det = cv2.QRCodeDetector()
+        # ret, cnt = det.detectMulti(np.hstack([self.img, self.img]))
+        decodedText, points, _ = det.detectAndDecode(self.img)
+        print(len(decodedText), decodedText)
+        if len(decodedText) < 5:
+            return
+        if points is not None:
+            cnt = []
+            points = points[0]
+            for i in range(len(points)):
+                pt1 = [int(val) for val in points[i]]
+                cnt.append(pt1)
+            xc = sum([cnt[0][0], cnt[1][0], cnt[2][0], cnt[3][0]]) / 4
+            yc = sum([cnt[0][1], cnt[1][1], cnt[2][1], cnt[3][1]]) / 4
+            # cv2.circle(self.img, (int(xc), int(yc)), 4, (0, 0, 255), -1)
+            cv2.drawContours(self.img, [np.array(cnt)], 0, (0, 0, 255), -1)
+            cv2.drawContours(self.img, [np.array(cnt)], 0, (0, 0, 255), 3)
+
+            # a = cv2.pointPolygonTest(np.array(cnt), (int(xc), int(yc)), False)
+            self.pointsQR.append([(int(xc), int(yc)), decodedText])
+
     def aruco_marker(self):
         cnt, _, _ = cv2.aruco.detectMarkers(self.img, self.aruco_dict, parameters=self.parameters)
         int_corners = np.int0(cnt)
@@ -83,8 +107,9 @@ class ImageProcessor:
                 """
         if self.cap:
             _, self.img = self.cap.read()
-            (w, h, c) = self.img.shape
-            self.img = cv2.resize(self.img, (int(h * self.ratio), int(w * self.ratio)))
+            if self.img:
+                (w, h, c) = self.img.shape
+                self.img = cv2.resize(self.img, (int(h * self.ratio), int(w * self.ratio)))
 
     def resize(self, num):
         """
@@ -122,17 +147,15 @@ class ImageProcessor:
         key = cv2.waitKey(num)
         return key
 
-    def watershed(self, icol=None):
+    def watershed(self, data=None):
         """
         Алгоритм сегментации близко находящихся клубней
         :return: Разделенный контур
         """
         RGB_belt = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
         self.hsv_belt = cv2.cvtColor(RGB_belt, cv2.COLOR_BGR2HSV)
-        if icol is None:
-            lowHue, lowSat, lowVal, highHue, highSat, highVal = TrackingBar.getColor()
-            blur = TrackingBar.getBlur()  # todo fix
-            watershedSens = TrackingBar.getWatershedSens()
+        if data is None:
+            lowHue, lowSat, lowVal, highHue, highSat, highVal, blur, watershedSens = TrackingBar.icol
         else:
             from colorBar import icol
             lowHue, lowSat, lowVal, highHue, highSat, highVal = icol[:6]
@@ -198,9 +221,10 @@ class ImageProcessor:
         """
         area = cv2.contourArea(cntr)
         ((x1, y1), r1) = cv2.minEnclosingCircle(cntr)
-
+        cv2.circle(self.belt, (int(x1), int(y1)), 4, (0, 255, 0), -1)
         #  убрать мелкий шум
-        if area > 1000 * self.ratio:
+
+        if area > self.frame.shape[0]:
 
             # qwe = cv2.drawContours(img.copy(), [hull], 0, (0, 0, 255), 6)
             # cv2.drawContours(qwe, [cnt], 0, (0, 255, 0), 2)
@@ -298,9 +322,29 @@ class ImageProcessor:
             tmpCof = self.frame.shape[0] / 1300
             # [255 - i for i in [int(x) for x in mean][0:3]]
             cv2.drawContours(self.frame, [cntr], 0, color_cnt, int(7 * tmpCof))
-            cv2.putText(self.frame, str(self.potato_id), (int(x1 - 40 * tmpCof), int(y1 + 33 * tmpCof)),
+            cv2.putText(self.frame, str(self.potato_id), (int(x1 - 70 * tmpCof), int(y1 + 33 * tmpCof)),
+                        3, 3.3 * tmpCof, (0, 0, 0), 2, cv2.LINE_AA)
+            cv2.putText(self.frame, str(self.potato_id), (int(x1 - 70 * tmpCof), int(y1 + 33 * tmpCof)),
                         3, 3.3 * tmpCof, (0, 255, 0), 1, cv2.LINE_AA)
             # cv2.putText(frame, str([round(i) for i in mean[:3]]), (x, y), 1, 1.2, (0, 255, 0), 2, cv2.LINE_AA)
+
+            if self.pointsQR:
+                for i in self.pointsQR:
+                    sample = cv2.pointPolygonTest(np.array(cntr), i[0], False)
+                    if sample == 1:
+                        cv2.putText(self.frame, i[1], (int(x1 - 70 * tmpCof), int(y1 + 33 * tmpCof)),
+                                    3, 2.3 * tmpCof, (0, 0, 0), 2, cv2.LINE_AA)
+                        cv2.putText(self.frame, i[1], (int(x1 - 70 * tmpCof), int(y1 + 33 * tmpCof)),
+                                    3, 2.3 * tmpCof, (0, 255, 0), 1, cv2.LINE_AA)
+                        tmp1 = (4 / 3) * self.PIXEL_TO_CM ** 2 * cv2.contourArea(cntr) * (
+                            min(rect[1][0], rect[1][1] * self.PIXEL_TO_CM / 2))
+                        if len(i[1]) > 4:
+                            [a, b, c] = [int(x) for x in i[1].split(',')]
+                            tmp2 = (4 / 3) * np.pi * a * b * c
+                            print(str(int(abs(tmp1 - tmp2) / tmp2 * 100)) + '% - Погрешность объема/массы')
+
+                        print(i[1])
+
             self.potato_id += 1
         else:
             cv2.putText(self.belt, str('x'), (int(x1) - 10, int(y1)), 1, 6, (0, 255, 0), 6, cv2.LINE_AA)
@@ -372,7 +416,10 @@ class ImageProcessor:
         areaCnt = round(cv2.contourArea(cntr))
         areaEllipse = round(np.pi / 4 * ellipse[1][0] * ellipse[1][1])
         # areaHull = int(cv2.contourArea(hull))
-        return round((areaCnt / areaEllipse) * 100)
+        if areaEllipse > 0:
+            return round((areaCnt / areaEllipse) * 100)
+        else:
+            return -1
 
     def create_report(self):
         """
@@ -390,9 +437,10 @@ class ImageProcessor:
 if __name__ == '__main__':
     # Создание объекта класса анализатора фото
     # 'data/5.jpg', 'data/1.mp4'
-    imgAnalyzer = ImageProcessor(srcImg='data/7.jpg', ratio=0.5)
+    imgAnalyzer = ImageProcessor(srcImg='data/8.jpg', ratio=1)
     # imgAnalyzer = ImageProcessor(camera=0, ratio=1)
     imgAnalyzer.aruco_marker()
+    imgAnalyzer.qr_code_detector()
     num = 0
     key = 0
 
