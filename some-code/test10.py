@@ -1,5 +1,4 @@
 import cv2
-import numpy as np
 from blurBar import getBlur
 
 # cap = cv2.VideoCapture('1.mp4')

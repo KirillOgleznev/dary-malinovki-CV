@@ -26,7 +26,9 @@ from PyQt5.QtGui import QImage, QPixmap
 
 # icol = (56, 60, 80, 103, 255, 255, 0, 20)  # camera
 # icol = (4, 54, 155, 22, 164, 207, 2, 37)  # camera 1
-icol = (0, 89, 0, 11, 255, 255, 3, 30) # camera 1 inv
+icol = (0, 89, 0, 11, 255, 255, 3, 30)  # camera 1 inv
+
+
 # icol = (97, 5, 94, 132, 46, 255, 11, 120)
 
 
@@ -35,10 +37,12 @@ class Thread(QThread):
     finished = pyqtSignal()
 
     def __init__(self, parent):
-        # self.parent = parent
+        self.parent = parent
         super().__init__(parent)
         self.flag = False
+        self.cap = self.parent.parent.imageProcessor.cap
         # self.imageProcessor = imageProcessor
+        pass
 
     @staticmethod
     def nothing(x):
@@ -56,7 +60,7 @@ class Thread(QThread):
         cv2.createTrackbar("u_v", "Tracking", myIcol[5], 255, self.nothing)
         cv2.createTrackbar("blur", "Tracking", myIcol[6], 10, self.nothing)
         cv2.createTrackbar("ws_sens", "Tracking", myIcol[7], 300, self.nothing)
-        cap = cv2.VideoCapture(1)
+        cap = self.cap
         while not self.flag:
             cv2.waitKey(1)
             lowHue = cv2.getTrackbarPos("l_h", "Tracking")
@@ -103,13 +107,15 @@ class Thread(QThread):
             h = int(h * cof)
             img1 = convertToQtFormat1.scaled(w, h, Qt.KeepAspectRatio)
             img2 = convertToQtFormat2.scaled(w, h, Qt.KeepAspectRatio)
+            # if not self.flag:
             self.changePixmap.emit(img1, img2, [lowHue, lowSat, lowVal, highHue, highSat,
                                                 highVal, blur, sens])
+        time.sleep(1)
         self.finished.emit()
 
 
 class TrackingBar(QDialog):
-    icol = (0, 89, 0, 11, 255, 255, 3, 30)
+    icol = (0, 89, 0, 11, 255, 255, 3, 20)
 
     def __init__(self, parent):
         super().__init__()
@@ -162,7 +168,8 @@ class TrackingBar(QDialog):
 
     @pyqtSlot()
     def final(self):
-        self.close()
+        self.reject()
+        self.parent.flagFrameUpdate = True
 
     @pyqtSlot(QImage, QImage, list)
     def setImage(self, img1, img2, newIcol):

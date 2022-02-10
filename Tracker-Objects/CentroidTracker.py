@@ -148,7 +148,7 @@ if __name__ == '__main__':
 
         RGB_belt = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         hsv_belt = cv2.cvtColor(RGB_belt, cv2.COLOR_BGR2HSV)
-        from colorBar import getColor, getBlur
+        from src.colorBar import getColor, getBlur
         lowHue, lowSat, lowVal, highHue, highSat, highVal = getColor()
         colorLow = np.array([lowHue, lowSat, lowVal])
         colorHigh = np.array([highHue, highSat, highVal])

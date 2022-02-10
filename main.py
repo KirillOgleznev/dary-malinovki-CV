@@ -1,18 +1,19 @@
 from cv2 import cv2
 import sys
-from PyQt5.QtWidgets import QAction, QTableView, QDialog, QWidget, QLabel, QApplication, QPushButton, QVBoxLayout, \
+from PyQt5.QtWidgets import QAction, QTableView, QDialog, QLabel, QApplication, QPushButton, QVBoxLayout, \
     QMainWindow
 from PyQt5.QtCore import QThread, Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QStandardItemModel, QStandardItem, QImage, QPixmap, QFont
 
-from imageProcessor import ImageProcessor
+from src.imageProcessor import ImageProcessor
 from collections import Counter
 from pymongo import MongoClient
-from colorBar import icol, TrackingBar
+from src.colorBar import TrackingBar
 
 password = 'secretPassword'
 connect = MongoClient('mongodb://Admin:' + password + '@140.238.219.37:27017')
 test_collection = connect['dm_db']['test']
+CAMERA = 0
 
 
 class ClassDialog(QDialog):
@@ -91,14 +92,14 @@ class Thread(QThread):
     changePixmap = pyqtSignal(QImage, list, ImageProcessor)
 
     def run(self):
-        imgAnalyzer = ImageProcessor(camera=1)
-        # imgAnalyzer = ImageProcessor(srcImg='data/5.jpg', ratio=0.5)
+        # imgAnalyzer = ImageProcessor(camera=CAMERA)
+        imgAnalyzer = ImageProcessor(srcImg='data/depth.png')
         while True:
             imgAnalyzer.update_frame()
-            imgAnalyzer.aruco_marker()
+            # imgAnalyzer.aruco_marker()
             imgAnalyzer.qr_code_detector()
 
-            from colorBar import icol
+            from src.colorBar import icol
             imgAnalyzer.find_and_draw_contours(icol)
             # imgAnalyzer.showAll(frame=False)
             cv2.waitKey(1)
@@ -143,9 +144,9 @@ class App(QMainWindow):
 
     def segmentator(self):
         self.flagFrameUpdate = False
-        dialog = TrackingBar(self)
+        TrackingBar(self)
 
-        dialog.exec_()
+        # dialog.exec_()
 
     @pyqtSlot(QImage, list, ImageProcessor)
     def setImage(self, image, potatoes , imageProcessor):

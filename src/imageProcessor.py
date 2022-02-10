@@ -1,5 +1,3 @@
-import time
-
 from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
 from scipy import ndimage
@@ -8,7 +6,7 @@ from cv2 import cv2
 import numpy as np
 
 # from colorBar import getColor, getBlur, getWatershedSens
-from colorBar import TrackingBar
+from src.colorBar import TrackingBar
 
 
 class ImageProcessor:
@@ -62,7 +60,7 @@ class ImageProcessor:
         det = cv2.QRCodeDetector()
         # ret, cnt = det.detectMulti(np.hstack([self.img, self.img]))
         decodedText, points, _ = det.detectAndDecode(self.img)
-        print(len(decodedText), decodedText)
+        # print(len(decodedText), decodedText)
         if len(decodedText) < 5:
             return
         if points is not None:
@@ -106,8 +104,8 @@ class ImageProcessor:
                 :return: None
                 """
         if self.cap:
-            _, self.img = self.cap.read()
-            if self.img:
+            rav, self.img = self.cap.read()
+            if rav:
                 (w, h, c) = self.img.shape
                 self.img = cv2.resize(self.img, (int(h * self.ratio), int(w * self.ratio)))
 
@@ -157,7 +155,7 @@ class ImageProcessor:
         if data is None:
             lowHue, lowSat, lowVal, highHue, highSat, highVal, blur, watershedSens = TrackingBar.icol
         else:
-            from colorBar import icol
+            from src.colorBar import icol
             lowHue, lowSat, lowVal, highHue, highSat, highVal = icol[:6]
             blur = ((icol[6] // 2) * 2) + 1
             watershedSens = icol[7]
