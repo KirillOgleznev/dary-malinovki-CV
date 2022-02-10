@@ -18,7 +18,7 @@ class ImageProcessor:
     aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_50)
     parameters = cv2.aruco.DetectorParameters_create()
 
-    def __init__(self, srcImg=None, srcVideo=None, camera=0, ratio=1.0, img=None):
+    def __init__(self, srcImg=None, srcVideo=None, camera=0, ratio=1.0, img=None, slasher=None):
         """
 
         :param srcImg: Путь до изображения
@@ -26,6 +26,7 @@ class ImageProcessor:
         :param camera: Номер камеры подключенной к ПК
         :param ratio: Множитель изменения входящего изображения (можно использовать для оптимизации)
         """
+        self.slasher = slasher
         self.pointsQR = []
         self.ratio = ratio
         if img:
@@ -45,6 +46,7 @@ class ImageProcessor:
         if self.img is None:
             raise Exception('Scr not found!')
         self.frame = self.img.copy()
+        self.img_ = self.img.copy()
         self.potato_id = 0
         self.potatoes = []
         self.hsv_belt = None
@@ -103,11 +105,16 @@ class ImageProcessor:
                 Обновляет кадр (Только для видео)
                 :return: None
                 """
+
         if self.cap:
             rav, self.img = self.cap.read()
             if rav:
                 (w, h, c) = self.img.shape
                 self.img = cv2.resize(self.img, (int(h * self.ratio), int(w * self.ratio)))
+        if self.slasher:
+            [[start_x, start_y], [end_x, end_y]] = self.slasher
+            self.img = self.img_[start_y:end_y, start_x:end_x]
+
 
     def resize(self, num):
         """
@@ -153,32 +160,41 @@ class ImageProcessor:
         RGB_belt = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
         self.hsv_belt = cv2.cvtColor(RGB_belt, cv2.COLOR_BGR2HSV)
         if data is None:
-            lowHue, lowSat, lowVal, highHue, highSat, highVal, blur, watershedSens = TrackingBar.icol
+            # todo добавить извлечение карты глубины
+            gray = np.mean(self.frame, -1)
+            mask = gray > gray.mean()
+            label_im, nb_labels = ndimage.label(mask)
+            gray3 = cv2.blur(gray, (21, 21))
+            local_maxi = peak_local_max(gray3, min_distance=11, labels=label_im)
+            mask = np.zeros(gray.shape, dtype=bool)
+            mask[tuple(local_maxi.T)] = True
+            markers, _ = ndimage.label(mask)
+            return watershed(-gray, markers, mask=label_im)
         else:
-            from src.colorBar import icol
+            icol = data
             lowHue, lowSat, lowVal, highHue, highSat, highVal = icol[:6]
             blur = ((icol[6] // 2) * 2) + 1
             watershedSens = icol[7]
-        colorLow = np.array([lowHue, lowSat, lowVal])
-        colorHigh = np.array([highHue, highSat, highVal])
-        self.threshold = cv2.inRange(self.hsv_belt, colorLow, colorHigh)
-        self.threshold = cv2.medianBlur(self.threshold, blur)
-        self.threshold = 255 - self.threshold
-        # closing = cv2.morphologyEx(self.threshold, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8), iterations=1)
-        # D = cv2.distanceTransform(self.threshold, cv2.DIST_L1, 3)
-        # D = cv2.normalize(D, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
-        D = ndimage.distance_transform_edt(self.threshold)
-        # cv2.imwrite('png.png', D)
+            colorLow = np.array([lowHue, lowSat, lowVal])
+            colorHigh = np.array([highHue, highSat, highVal])
+            self.threshold = cv2.inRange(self.hsv_belt, colorLow, colorHigh)
+            self.threshold = cv2.medianBlur(self.threshold, blur)
+            self.threshold = 255 - self.threshold
+            # closing = cv2.morphologyEx(self.threshold, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8), iterations=1)
+            # D = cv2.distanceTransform(self.threshold, cv2.DIST_L1, 3)
+            # D = cv2.normalize(D, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
+            D = ndimage.distance_transform_edt(self.threshold)
+            # cv2.imwrite('png.png', D)
 
-        # localMax = peak_local_max(D, indices=False, min_distance=watershedSens,
-        #                           labels=self.threshold)
-        # markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
-        coords = peak_local_max(D, min_distance=watershedSens, labels=self.threshold)
-        mask = np.zeros(D.shape, dtype=bool)
-        mask[tuple(coords.T)] = True
-        markers, _ = ndimage.label(mask)
+            # localMax = peak_local_max(D, indices=False, min_distance=watershedSens,
+            #                           labels=self.threshold)
+            # markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
+            coords = peak_local_max(D, min_distance=watershedSens, labels=self.threshold)
+            mask = np.zeros(D.shape, dtype=bool)
+            mask[tuple(coords.T)] = True
+            markers, _ = ndimage.label(mask)
 
-        return watershed(-D, markers, mask=self.threshold)
+            return watershed(-D, markers, mask=self.threshold)
 
     def find_and_draw_contours(self, icol=None):
         """
