@@ -2,6 +2,7 @@ __pycache__
 venv
 .idea
 .ipynb_checkpoints
+Jupyter/.ipynb_checkpoints
 table.csv
 *.csv
 *.mp4
