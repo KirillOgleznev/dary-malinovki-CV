@@ -1,12 +1,6 @@
 from PyQt5.QtCore import QPoint, QRect
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor, QImage
 from PyQt5.QtWidgets import QDialog, QPushButton, QVBoxLayout, QLabel
-from pymongo import MongoClient
-
-password = 'secretPassword'
-connect = MongoClient('mongodb://Admin:' + password + '@140.238.219.37:27017')
-test_collection = connect['dm_db']['test']
-CAMERA = 0
 
 
 class AreaSelectionDialog(QDialog):
@@ -44,7 +38,9 @@ class AreaSelectionDialog(QDialog):
         self.parent = parent
 
     def btnClosed(self):
-        self.parent.imageProcessor.slasher = [[self.begin.x(), self.begin.y()],
+
+        # todo Исправить баг - если точки начала и коца инвертированы
+        self.imageProcessor.slasher = [[self.begin.x(), self.begin.y()],
                                               [self.end.x(), self.end.y()]]
         self.reject()
 

@@ -2,11 +2,11 @@ from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
 from scipy import ndimage
 from cv2 import cv2
-
+import pyrealsense2 as rs
 import numpy as np
 
-# from colorBar import getColor, getBlur, getWatershedSens
-from src.colorBar import TrackingBar
+BLUR_CONST = 17
+LOCAL_MAX_CONST = 3
 
 
 class ImageProcessor:
@@ -26,10 +26,46 @@ class ImageProcessor:
         :param camera: Номер камеры подключенной к ПК
         :param ratio: Множитель изменения входящего изображения (можно использовать для оптимизации)
         """
+        self.camera = camera
         self.slasher = slasher
         self.pointsQR = []
         self.ratio = ratio
-        if img:
+        self.depth_colormap = None
+        self.depth_image = None
+        self.depth_background = None
+        if camera == 'realsense':
+            self.pipeline = rs.pipeline()
+            config = rs.config()
+            pipeline_wrapper = rs.pipeline_wrapper(self.pipeline)
+
+            pipeline_profile = config.resolve(pipeline_wrapper)
+            device = pipeline_profile.get_device()
+            found_rgb = False
+            for s in device.sensors:
+                if s.get_info(rs.camera_info.name) == 'RGB Camera':
+                    found_rgb = True
+                    break
+            if not found_rgb:
+                print("The demo requires Depth camera with Color sensor")
+                exit(0)
+            config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+            config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+            profile = self.pipeline.start(config)
+            depth_sensor = profile.get_device().first_depth_sensor()
+            depth_scale = depth_sensor.get_depth_scale()
+            clipping_distance_in_meters = 1  # 1 meter
+            self.clipping_distance = clipping_distance_in_meters / depth_scale
+            self.clipping_distance = 665
+            align_to = rs.stream.color
+            self.align = rs.align(align_to)
+            self.colorizer = rs.colorizer()
+            self.colorizer.set_option(rs.option.visual_preset, 0)  # 0=Dynamic, 1=Fixed, 2=Near, 3=Far
+            self.colorizer.set_option(rs.option.min_distance, 0.6)
+            self.colorizer.set_option(rs.option.max_distance, 0.7)
+            self.colorizer.set_option(rs.option.color_scheme, 2)
+            self.update_frame()
+
+        elif img:
             self.img = img
             self.cap = None
         elif srcImg:
@@ -105,8 +141,35 @@ class ImageProcessor:
                 Обновляет кадр (Только для видео)
                 :return: None
                 """
+        if self.camera == 'realsense':
+            frames = self.pipeline.wait_for_frames()
+            aligned_frames = self.align.process(frames)
 
-        if self.cap:
+            aligned_depth_frame = aligned_frames.get_depth_frame()
+            color_frame = aligned_frames.get_color_frame()
+
+            self.depth_image = np.asanyarray(aligned_depth_frame.get_data())
+            color_image = np.asanyarray(color_frame.get_data())
+
+            depth_image_3d = np.dstack((self.depth_image,
+                                        self.depth_image,
+                                        self.depth_image))
+            # bg_removed = np.where((depth_image_3d > self.clipping_distance) | (depth_image_3d <= 0), grey_color,
+            # color_image)
+
+            depth_colormap = np.asanyarray(self.colorizer.colorize(aligned_depth_frame).get_data())
+
+            if self.depth_background is None:
+                depth_colormap_removed = np.where((depth_image_3d > self.clipping_distance) | (depth_image_3d <= 0), 0,
+                                                  depth_colormap)
+            else:
+                depth_colormap_removed = np.where((depth_image_3d > self.depth_background - 10) | (depth_image_3d <= 0),
+                                                  0, depth_colormap)
+            self.depth_colormap = depth_colormap_removed
+            self.img = color_image
+            self.img_ = color_image
+
+        elif self.cap:
             rav, self.img = self.cap.read()
             if rav:
                 (w, h, c) = self.img.shape
@@ -115,6 +178,8 @@ class ImageProcessor:
             [[start_x, start_y], [end_x, end_y]] = self.slasher
             self.img = self.img_[start_y:end_y, start_x:end_x]
 
+            if self.depth_colormap.any() is not None:
+                self.depth_colormap = self.depth_colormap[start_y:end_y, start_x:end_x]
 
     def resize(self, num):
         """
@@ -157,20 +222,19 @@ class ImageProcessor:
         Алгоритм сегментации близко находящихся клубней
         :return: Разделенный контур
         """
-        RGB_belt = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
-        self.hsv_belt = cv2.cvtColor(RGB_belt, cv2.COLOR_BGR2HSV)
         if data is None:
-            # todo добавить извлечение карты глубины
-            gray = np.mean(self.frame, -1)
+            gray = np.mean(self.depth_colormap, -1)
             mask = gray > gray.mean()
             label_im, nb_labels = ndimage.label(mask)
-            gray3 = cv2.blur(gray, (21, 21))
-            local_maxi = peak_local_max(gray3, min_distance=11, labels=label_im)
+            gray3 = cv2.blur(gray, (BLUR_CONST, BLUR_CONST))
+            local_maxi = peak_local_max(gray3, min_distance=LOCAL_MAX_CONST, labels=label_im)
             mask = np.zeros(gray.shape, dtype=bool)
             mask[tuple(local_maxi.T)] = True
             markers, _ = ndimage.label(mask)
             return watershed(-gray, markers, mask=label_im)
         else:
+            RGB_belt = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
+            self.hsv_belt = cv2.cvtColor(RGB_belt, cv2.COLOR_BGR2HSV)
             icol = data
             lowHue, lowSat, lowVal, highHue, highSat, highVal = icol[:6]
             blur = ((icol[6] // 2) * 2) + 1
@@ -206,7 +270,7 @@ class ImageProcessor:
         self.potatoes = [self.COLUMNS_NAMES]
         self.frame = self.img.copy()
         self.belt = self.img.copy()
-        # self.belt = self.frame.copy()
+
         if icol is None:
             labels = self.watershed()
         else:
@@ -217,9 +281,7 @@ class ImageProcessor:
             gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
             mask = np.zeros(gray.shape, dtype="uint8")
             mask[labels == label] = 255
-            # detect contours in the mask and grab the largest one
-            cnts, _ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
-                                       cv2.CHAIN_APPROX_SIMPLE)
+            cnts, _ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             cnt = max(cnts, key=cv2.contourArea)
             if len(cnt) < 5:
                 continue
@@ -237,8 +299,8 @@ class ImageProcessor:
         ((x1, y1), r1) = cv2.minEnclosingCircle(cntr)
         cv2.circle(self.belt, (int(x1), int(y1)), 4, (0, 255, 0), -1)
         #  убрать мелкий шум
-
-        if area > self.frame.shape[0]:
+        # todo определить границу шума
+        if area > 300:
 
             # qwe = cv2.drawContours(img.copy(), [hull], 0, (0, 0, 255), 6)
             # cv2.drawContours(qwe, [cnt], 0, (0, 255, 0), 2)
@@ -446,6 +508,14 @@ class ImageProcessor:
         #     f.write(str(i) + '\n')
         # f.close()
         pass
+
+    def calibratorProcess(self):
+        depth_background = np.dstack((self.depth_image,
+                                      self.depth_image,
+                                      self.depth_image))
+        self.depth_background = depth_background
+        # depth_colormap_removed = np.where((depth_image_2 <= depth_image_1 + 10) | (depth_image_2 <= 0), 0,
+        #                                   self.img)
 
 
 if __name__ == '__main__':
