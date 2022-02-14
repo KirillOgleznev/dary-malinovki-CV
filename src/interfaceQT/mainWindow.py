@@ -1,6 +1,6 @@
 from PyQt5.QtCore import QThread, Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QImage, QPixmap, QFont
-from PyQt5.QtWidgets import QAction, QLabel, QMainWindow
+from PyQt5.QtWidgets import QAction, QLabel, QMainWindow, QMessageBox
 from cv2 import cv2
 
 from src.colorBar import TrackingBar
@@ -13,8 +13,8 @@ class Thread(QThread):
     changePixmap = pyqtSignal(QImage, list, ImageProcessor)
 
     def run(self):
-        # imgAnalyzer = ImageProcessor(camera=CAMERA)
-        imgAnalyzer = ImageProcessor(srcImg='data/depth.png')
+        imgAnalyzer = ImageProcessor(camera='realsense')
+        # imgAnalyzer = ImageProcessor(srcImg='data/depth.png')
         while True:
             imgAnalyzer.update_frame()
             # imgAnalyzer.aruco_marker()
@@ -26,6 +26,7 @@ class Thread(QThread):
             frame = imgAnalyzer.getFrame()
             h, w, ch = frame.shape
             bytesPerLine = ch * w
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             convertToQtFormat = QImage(frame.data, w, h, bytesPerLine, QImage.Format_RGB888)
             p = convertToQtFormat.scaled(w, h, 1)
             self.changePixmap.emit(p, imgAnalyzer.potatoes, imgAnalyzer)
@@ -70,10 +71,26 @@ class App(QMainWindow):
         settingsMenu = self.menuBar().addMenu("&Настройки")
         segmentationAct = QAction("Настройка сегментации", self, triggered=self.segmentator)
         settingsMenu.addAction(segmentationAct)
+        calibratorAct = QAction("Калиброва фона", self, triggered=self.calibrator)
+        settingsMenu.addAction(calibratorAct)
+
+    def calibrator(self):
+        msgBox = QMessageBox()
+        msgBox.setIcon(QMessageBox.Information)
+        msgBox.setText("Убедитесь, что в области анализа нет объектов!")
+        msgBox.setWindowTitle("Information")
+        msgBox.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+
+        returnValue = msgBox.exec()
+        if returnValue == QMessageBox.Ok:
+            self.imageProcessor.calibratorProcess()
+        else:
+            print('Cancel clicked')
 
     def segmentator(self):
-        self.flagFrameUpdate = False
-        TrackingBar(self)
+        pass
+        # self.flagFrameUpdate = False
+        # TrackingBar(self)
 
         # dialog.exec_()
 
