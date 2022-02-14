@@ -5,8 +5,8 @@ from cv2 import cv2
 import pyrealsense2 as rs
 import numpy as np
 
-BLUR_CONST = 17
-LOCAL_MAX_CONST = 3
+BLUR_CONST = 19
+LOCAL_MAX_CONST = 7
 
 
 class ImageProcessor:

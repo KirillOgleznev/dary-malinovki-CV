@@ -49,7 +49,7 @@ class AreaSelectionDialog(QDialog):
         image = self.parent.imageProcessor.img_
         h, w, ch = image.shape
         bytesPerLine = ch * w
-        convertToQtFormat = QImage(image.data, w, h, bytesPerLine, QImage.Format_RGB888)
+        convertToQtFormat = QImage(image.data, w, h, bytesPerLine, QImage.Format_BGR888)
         image = convertToQtFormat.scaled(w, h, 1)
 
         pixmap = QPixmap.fromImage(image)
