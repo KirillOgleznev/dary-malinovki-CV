@@ -13,8 +13,6 @@ class ImageProcessor:
     COLOR_ACCURACY = -5
     # Множитель преобразования пикселей в сантиметры
     PIXEL_TO_CM = 0.1029
-    COLUMNS_NAMES = ['id', 'area_cm', 'RGB', 'variety', 'ellipsoid_shape',
-                     'weight', 'weight_fraction', 'min_diameter_mm', 'size_fraction']
     aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_50)
     parameters = cv2.aruco.DetectorParameters_create()
 
@@ -32,7 +30,10 @@ class ImageProcessor:
         self.ratio = ratio
         self.depth_colormap = None
         self.depth_image = None
+        self.aligned_depth_frame = None
+
         self.depth_background = None
+        self.aligned_depth_background = None
         if camera == 'realsense':
             self.pipeline = rs.pipeline()
             config = rs.config()
@@ -90,6 +91,9 @@ class ImageProcessor:
         self.belt = self.frame.copy()
         # self.shifted = cv2.pyrMeanShiftFiltering(img, 21, 51)
 
+    def getPotatoes(self):
+        return [self.potatoes, self.aligned_depth_frame, self.slasher, self.aligned_depth_background]
+
     def getFrame(self):
         return self.frame
 
@@ -145,10 +149,10 @@ class ImageProcessor:
             frames = self.pipeline.wait_for_frames()
             aligned_frames = self.align.process(frames)
 
-            aligned_depth_frame = aligned_frames.get_depth_frame()
+            self.aligned_depth_frame = aligned_frames.get_depth_frame()
             color_frame = aligned_frames.get_color_frame()
 
-            self.depth_image = np.asanyarray(aligned_depth_frame.get_data())
+            self.depth_image = np.asanyarray(self.aligned_depth_frame.get_data())
             color_image = np.asanyarray(color_frame.get_data())
 
             depth_image_3d = np.dstack((self.depth_image,
@@ -157,7 +161,7 @@ class ImageProcessor:
             # bg_removed = np.where((depth_image_3d > self.clipping_distance) | (depth_image_3d <= 0), grey_color,
             # color_image)
 
-            depth_colormap = np.asanyarray(self.colorizer.colorize(aligned_depth_frame).get_data())
+            depth_colormap = np.asanyarray(self.colorizer.colorize(self.aligned_depth_frame).get_data())
 
             if self.depth_background is None:
                 depth_colormap_removed = np.where((depth_image_3d > self.clipping_distance) | (depth_image_3d <= 0), 0,
@@ -176,6 +180,14 @@ class ImageProcessor:
                 self.img = cv2.resize(self.img, (int(h * self.ratio), int(w * self.ratio)))
         if self.slasher:
             [[start_x, start_y], [end_x, end_y]] = self.slasher
+            self.img = self.img_[start_y:end_y, start_x:end_x]
+
+            if self.depth_colormap.any() is not None:
+                self.depth_colormap = self.depth_colormap[start_y:end_y, start_x:end_x]
+        else:
+            (w, h, c) = self.img.shape
+            self.slasher = [[67, 0], [h, w - 10]]
+            [[start_x, start_y], [end_x, end_y]] = [[67, 0], [h, w - 10]]
             self.img = self.img_[start_y:end_y, start_x:end_x]
 
             if self.depth_colormap.any() is not None:
@@ -267,7 +279,7 @@ class ImageProcessor:
         """
         # _, img = cap.read()
         self.potato_id = 0
-        self.potatoes = [self.COLUMNS_NAMES]
+        self.potatoes = []
         self.frame = self.img.copy()
         self.belt = self.img.copy()
 
@@ -367,8 +379,6 @@ class ImageProcessor:
             #         draw_contour(tmp2)
             #         return
 
-            # Вывод характеризующего коэфф-а картофеля
-
             # cv2.drawContours(frame, [hull], 0, (randrange(255), randrange(255), randrange(255)), 2)
 
             # cv2.ellipse(frame, cv2.fitEllipse(cnt), (0, 0, 255), 2)
@@ -377,20 +387,21 @@ class ImageProcessor:
             maskTmp = cv2.drawContours(np.zeros(self.img.shape[:2], np.uint8), [cntr], -1, 255, -1)
             mean = cv2.mean(self.img, mask=maskTmp)
             class_p, color_cnt = self.classifier_potatoes([round(x) for x in mean][2:: -1])
-            area = round(self.PIXEL_TO_CM ** 2 * cv2.contourArea(cntr))
             rect = cv2.minAreaRect(cntr)
-            fraction = self.fraction_classifier(round(min(rect[1][0], rect[1][1])))
-            weight = area * 2.5
-            weight_fraction = self.weight_classifier(weight)
-            self.potatoes.append([str(self.potato_id),
-                                  str(area),
-                                  str([round(x) for x in mean][2:: -1]),
-                                  class_p,
-                                  str(self.ellipse_deviation(cntr)),
-                                  str(weight),
-                                  str(weight_fraction),
-                                  str(round(min(rect[1][0], rect[1][1]))),
-                                  str(fraction)])
+
+            cY = int(rect[0][1])
+            selceted_points = [[px, cY] for [px, py] in cntr if
+                               cv2.pointPolygonTest(np.array(cntr), (int(px), int(cY)),
+                                                    measureDist=False) == 0]
+
+            if selceted_points:
+                left_point = min(selceted_points, key=lambda x: x[0])
+                right_point = max(selceted_points, key=lambda x: x[0])
+                # cv2.line(self.frame, tuple(left_point), tuple(right_point), [0, 255, 0], 2)
+
+                self.potatoes.append([self.potato_id, cntr, maskTmp, mean])
+            else:
+                print('err')
 
             # cv2.putText(self.frame, ('%02d%02d%02d' % mean[:3])[:self.COLOR_ACCURACY], (int(x1) - 50, int(y1) + 20),
             #             1, 6, (0, 255, 0), 6, cv2.LINE_AA)
@@ -412,6 +423,7 @@ class ImageProcessor:
                                     3, 2.3 * tmpCof, (0, 0, 0), 2, cv2.LINE_AA)
                         cv2.putText(self.frame, i[1], (int(x1 - 70 * tmpCof), int(y1 + 33 * tmpCof)),
                                     3, 2.3 * tmpCof, (0, 255, 0), 1, cv2.LINE_AA)
+                        rect = cv2.minAreaRect(cntr)
                         tmp1 = (4 / 3) * self.PIXEL_TO_CM ** 2 * cv2.contourArea(cntr) * (
                             min(rect[1][0], rect[1][1] * self.PIXEL_TO_CM / 2))
                         if len(i[1]) > 4:
@@ -510,10 +522,11 @@ class ImageProcessor:
         pass
 
     def calibratorProcess(self):
-        depth_background = np.dstack((self.depth_image,
-                                      self.depth_image,
-                                      self.depth_image))
+        tmp = self.depth_image
+        depth_background = np.dstack((tmp, tmp, tmp))
         self.depth_background = depth_background
+        self.aligned_depth_background = self.aligned_depth_frame
+
         # depth_colormap_removed = np.where((depth_image_2 <= depth_image_1 + 10) | (depth_image_2 <= 0), 0,
         #                                   self.img)
 

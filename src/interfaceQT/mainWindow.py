@@ -3,7 +3,6 @@ from PyQt5.QtGui import QImage, QPixmap, QFont
 from PyQt5.QtWidgets import QAction, QLabel, QMainWindow, QMessageBox
 from cv2 import cv2
 
-from src.colorBar import TrackingBar
 from src.imageProcessor import ImageProcessor
 from src.interfaceQT.dataDialog import ClassDialog
 from src.interfaceQT.areaSelectionDialog import AreaSelectionDialog
@@ -29,7 +28,7 @@ class Thread(QThread):
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             convertToQtFormat = QImage(frame.data, w, h, bytesPerLine, QImage.Format_RGB888)
             p = convertToQtFormat.scaled(w, h, 1)
-            self.changePixmap.emit(p, imgAnalyzer.potatoes, imgAnalyzer)
+            self.changePixmap.emit(p, imgAnalyzer.getPotatoes(), imgAnalyzer)
 
 
 class App(QMainWindow):
@@ -37,7 +36,7 @@ class App(QMainWindow):
         super().__init__()
         self.title = 'AnalysisWindow'
 
-        self.potatoesList = [ImageProcessor.COLUMNS_NAMES]
+        self.potatoesList = []
         self.imageProcessor = None
         self.flagFrameUpdate = True
         self.areaSelectionDialogOpen = False
