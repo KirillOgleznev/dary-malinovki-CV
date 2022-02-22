@@ -4,9 +4,18 @@ from scipy import ndimage
 from cv2 import cv2
 import pyrealsense2 as rs
 import numpy as np
+import pickle
 
 BLUR_CONST = 19
 LOCAL_MAX_CONST = 7
+
+
+def draw_circle(event, x, y, flags, param):
+    if (event == cv2.EVENT_LBUTTONDOWN):
+        # dist = aligned_depth_frame.get_distance(x, y)
+        #
+        # dist = round(dist * 100, 2)
+        print(x, y)
 
 
 class ImageProcessor:
@@ -33,7 +42,6 @@ class ImageProcessor:
         self.aligned_depth_frame = None
 
         self.depth_background = None
-        self.aligned_depth_background = None
         if camera == 'realsense':
             self.pipeline = rs.pipeline()
             config = rs.config()
@@ -53,9 +61,9 @@ class ImageProcessor:
             config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
             profile = self.pipeline.start(config)
             depth_sensor = profile.get_device().first_depth_sensor()
-            depth_scale = depth_sensor.get_depth_scale()
+            self.depth_scale = depth_sensor.get_depth_scale()
             clipping_distance_in_meters = 1  # 1 meter
-            self.clipping_distance = clipping_distance_in_meters / depth_scale
+            self.clipping_distance = clipping_distance_in_meters / self.depth_scale
             self.clipping_distance = 665
             align_to = rs.stream.color
             self.align = rs.align(align_to)
@@ -92,7 +100,9 @@ class ImageProcessor:
         # self.shifted = cv2.pyrMeanShiftFiltering(img, 21, 51)
 
     def getPotatoes(self):
-        return [self.potatoes, self.aligned_depth_frame, self.slasher, self.aligned_depth_background]
+        return [self.potatoes, self.aligned_depth_frame, self.slasher,
+                self.depth_background, self.depth_scale, self.depth_colormap,
+                self.depth_image]
 
     def getFrame(self):
         return self.frame
@@ -147,7 +157,9 @@ class ImageProcessor:
                 """
         if self.camera == 'realsense':
             frames = self.pipeline.wait_for_frames()
+            frames.keep()
             aligned_frames = self.align.process(frames)
+            aligned_frames.keep()
 
             self.aligned_depth_frame = aligned_frames.get_depth_frame()
             color_frame = aligned_frames.get_color_frame()
@@ -164,11 +176,22 @@ class ImageProcessor:
             depth_colormap = np.asanyarray(self.colorizer.colorize(self.aligned_depth_frame).get_data())
 
             if self.depth_background is None:
-                depth_colormap_removed = np.where((depth_image_3d > self.clipping_distance) | (depth_image_3d <= 0), 0,
-                                                  depth_colormap)
+                with open('dump.txt', 'rb') as f:
+                    tmp = pickle.load(f)
+                depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(tmp, alpha=0.03), cv2.COLORMAP_JET)
+                self.depth_background = np.dstack((tmp,
+                                                   tmp,
+                                                   tmp))
+                depth_colormap_removed = np.where((depth_image_3d > self.depth_background - 10) | (depth_image_3d <= 0),
+                                                  0, depth_colormap)
+
+                # depth_colormap_removed = np.where((depth_image_3d > self.clipping_distance) | (depth_image_3d <= 0), 0,
+                #                                   depth_colormap)
             else:
                 depth_colormap_removed = np.where((depth_image_3d > self.depth_background - 10) | (depth_image_3d <= 0),
                                                   0, depth_colormap)
+                # depth_colormap_removed = np.where((depth_image_3d > self.depth_background - 10) | (depth_image_3d <= 0),
+                #                                   0, depth_colormap)
             self.depth_colormap = depth_colormap_removed
             self.img = color_image
             self.img_ = color_image
@@ -176,22 +199,22 @@ class ImageProcessor:
         elif self.cap:
             rav, self.img = self.cap.read()
             if rav:
-                (w, h, c) = self.img.shape
-                self.img = cv2.resize(self.img, (int(h * self.ratio), int(w * self.ratio)))
-        if self.slasher:
-            [[start_x, start_y], [end_x, end_y]] = self.slasher
+                (h, w, c) = self.img.shape
+                self.img = cv2.resize(self.img, (int(w * self.ratio), int(h * self.ratio)))
+        if not self.slasher:
+            (h, w, c) = self.img_.shape
+            self.slasher = [[67, 0], [w, h - 10]]
+            [[start_x, start_y], [end_x, end_y]] = [[67, 0], [w, h - 10]]
             self.img = self.img_[start_y:end_y, start_x:end_x]
+        (h, w, c) = self.img_.shape
+        cv2.circle(self.img, (int(w / 2), int(h / 2)), 4, (0, 0, 255), -1)
 
-            if self.depth_colormap.any() is not None:
-                self.depth_colormap = self.depth_colormap[start_y:end_y, start_x:end_x]
-        else:
-            (w, h, c) = self.img.shape
-            self.slasher = [[67, 0], [h, w - 10]]
-            [[start_x, start_y], [end_x, end_y]] = [[67, 0], [h, w - 10]]
-            self.img = self.img_[start_y:end_y, start_x:end_x]
+        [[start_x, start_y], [end_x, end_y]] = self.slasher
+        self.img = self.img_[start_y:end_y, start_x:end_x]
+        self.depth_image = self.depth_image[start_y:end_y, start_x:end_x]
+        if self.depth_colormap.any() is not None:
+            self.depth_colormap = self.depth_colormap[start_y:end_y, start_x:end_x]
 
-            if self.depth_colormap.any() is not None:
-                self.depth_colormap = self.depth_colormap[start_y:end_y, start_x:end_x]
 
     def resize(self, num):
         """
@@ -409,6 +432,8 @@ class ImageProcessor:
             tmpCof = self.frame.shape[0] / 1300
             # [255 - i for i in [int(x) for x in mean][0:3]]
             cv2.drawContours(self.frame, [cntr], 0, color_cnt, int(7 * tmpCof))
+
+            # self.potato_id = round((cv2.contourArea(cntr))/10)
             cv2.putText(self.frame, str(self.potato_id), (int(x1 - 70 * tmpCof), int(y1 + 33 * tmpCof)),
                         3, 3.3 * tmpCof, (0, 0, 0), 2, cv2.LINE_AA)
             cv2.putText(self.frame, str(self.potato_id), (int(x1 - 70 * tmpCof), int(y1 + 33 * tmpCof)),
@@ -522,13 +547,20 @@ class ImageProcessor:
         pass
 
     def calibratorProcess(self):
+
         tmp = self.depth_image
         depth_background = np.dstack((tmp, tmp, tmp))
         self.depth_background = depth_background
-        self.aligned_depth_background = self.aligned_depth_frame
 
-        # depth_colormap_removed = np.where((depth_image_2 <= depth_image_1 + 10) | (depth_image_2 <= 0), 0,
-        #                                   self.img)
+        # ply = rs.save_to_ply("test1.ply")
+        # ply.set_option(rs.save_to_ply.option_ply_binary, True)
+        # ply.set_option(rs.save_to_ply.option_ply_normals, False)
+        # ply.process(self.aligned_depth_background)
+        # with open('dump.txt', 'wb') as f:
+        #     f.write(tmp)
+        with open('dump.txt', 'wb') as f:
+            # Step 3
+            pickle.dump(tmp, f)
 
 
 if __name__ == '__main__':

@@ -130,6 +130,7 @@ try:
             continue
 
         # 0.6 - 0.8
+        print(aligned_depth_frame.get_units())
         depth_image = np.asanyarray(aligned_depth_frame.get_data())
         color_image = np.asanyarray(color_frame.get_data())
 
