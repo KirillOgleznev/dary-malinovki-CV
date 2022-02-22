@@ -1,4 +1,5 @@
 import math
+import time
 from collections import Counter
 
 import numpy as np
@@ -49,7 +50,10 @@ class ClassDialog(QDialog):
         potatoes = tmp[0]
         aligned_depth_frame = tmp[1]
         slasher = tmp[2]
-        aligned_depth_background = tmp[3]
+        depth_background = tmp[3]
+        depth_scale = tmp[4]
+        depth_colormap = tmp[5]
+        depth_image = tmp[6]
         self.dataList = [COLUMNS_NAMES]
         for i in potatoes:
             idP = i[0]
@@ -58,49 +62,55 @@ class ClassDialog(QDialog):
             mean = i[3]
             rect = cv2.minAreaRect(cntr)
 
-            cY = int(rect[0][1])
-            selceted_points = [[px, cY] for [px, py] in cntr if
-                               cv2.pointPolygonTest(np.array(cntr), (int(px), int(cY)),
-                                                    measureDist=False) == 0]
-            (ix, iy) = min(selceted_points, key=lambda x: x[0])
-            (x, y) = max(selceted_points, key=lambda x: x[0])
+            # cY = int(rect[0][1])
+            # selceted_points = [[px, cY] for [px, py] in cntr if
+            #                    cv2.pointPolygonTest(np.array(cntr), (int(px), int(cY)),
+            #                                         measureDist=False) == 0]
+            # (ix, iy) = min(selceted_points, key=lambda x: x[0])
+            # (x, y) = max(selceted_points, key=lambda x: x[0])
             # udist = aligned_depth_frame.get_distance(ix, iy)
             # vdist = aligned_depth_frame.get_distance(x, y)
-            udist = aligned_depth_frame.get_distance(int(rect[0][0]), int(rect[0][1]))
-            vdist = udist
-            a = aligned_depth_frame.profile.as_video_stream_profile().intrinsics
-            point1 = rs.rs2_deproject_pixel_to_point(a, [ix, iy], udist)
-            point2 = rs.rs2_deproject_pixel_to_point(a, [x, y], vdist)
+            # udist = aligned_depth_frame.get_distance(int(rect[0][0]), int(rect[0][1])) + (distHeight/2)
+            # udist = aligned_depth_frame.get_distance(int(rect[0][0]), int(rect[0][1]))
+            # a = aligned_depth_frame.profile.as_video_stream_profile().intrinsics
+            # point1 = rs.rs2_deproject_pixel_to_point(a, [ix, iy], udist)
+            # point2 = rs.rs2_deproject_pixel_to_point(a, [x, y], udist)
 
-            distMeters = math.sqrt(
-                math.pow(point1[0] - point2[0], 2) + math.pow(point1[1] - point2[1], 2) + math.pow(
-                    point1[2] - point2[2], 2))
+            # distMeters = math.sqrt(
+            #     math.pow(point1[0] - point2[0], 2) + math.pow(point1[1] - point2[1], 2) + math.pow(
+            #         point1[2] - point2[2], 2))
 
-            minX = 100
-            coord = False
-            [[start_x, start_y], [end_x, end_y]] = slasher
-            if aligned_depth_background:
-                for i in range(len(maskP)):
-                    for j in range(len(maskP[i])):
-                        if maskP[i][j] != 0:
-                            # cv2.circle(self.frame, (j, i), 2, (0, 255, 0), -1)
-                            tmp = aligned_depth_frame.get_distance(start_x + j, start_y + i)
-                            if minX > tmp != 0:
-                                minX = tmp
-                                # 362 193
-                                coord = (start_x + j, start_y + i)
-            a = aligned_depth_frame.get_distance(int(coord[0]), int(coord[1]))
-            b = aligned_depth_background.get_distance(int(coord[0]), int(coord[1]))
+            tmp = np.dstack((depth_image,
+                             depth_image,
+                             depth_image))
+            chunk = cv2.bitwise_and(tmp, tmp, mask=maskP)
+            minD = np.min(chunk[np.nonzero(chunk)])
+            coords = (np.where(chunk == [minD, minD, minD]))
+            minX = minD * depth_scale
+            coord = (coords[0][0], coords[1][0])
+
+            # arr[start_y + i][start_x + j]
+            # for i in range(len(maskP)):
+            #     for j in range(len(maskP[i])):
+            #         if maskP[i][j] != 0:
+            #             tmp = arr[start_y + i][start_x + j] * depth_scale
+            #             if minX > tmp != 0:
+            #                 minX = tmp
+            #                 # 362 193
+            #                 coord = (start_x + j, start_y + i)
+
+            a = minX
+            # b = aligned_depth_background.get_distance(int(coord[0]), int(coord[1]))
+            b = depth_background[int(coord[1])][int(coord[0])][0] * depth_scale
             distHeight = round(((b - a) * 1000), 2)
-            distPixels = math.sqrt((x - ix) ** 2 + (y - iy) ** 2)
-            PIXEL_TO_MM = ((distMeters * 1000) / distPixels)
+            # distPixels = math.sqrt((x - ix) ** 2 + (y - iy) ** 2)
+            # PIXEL_TO_MM = ((distMeters * 1000) / distPixels)
             # print(PIXEL_TO_MM / minX)
-            PIXEL_TO_MM = 1.45
+            PIXEL_TO_MM = 1.47
             PIXEL_TO_MM = PIXEL_TO_MM * minX
             class_p, color_cnt = self.classifier_potatoes([round(x) for x in mean][2:: -1])
 
             area = round(PIXEL_TO_MM * PIXEL_TO_MM * cv2.contourArea(cntr))
-
 
             fraction = self.fraction_classifier(round(min(rect[1][0], rect[1][1])))
 
@@ -118,7 +128,7 @@ class ClassDialog(QDialog):
                                   str(weight_fraction),
                                   str(round(min(rect[1][0], rect[1][1]))),
                                   str(fraction),
-                                  str(distHeight)])
+                                  str(round(distHeight))])
 
     @staticmethod
     def ellipse_deviation(cntr):
@@ -174,7 +184,7 @@ class ClassDialog(QDialog):
     @staticmethod
     def fraction_classifier(min_diameter):
         if min_diameter > 80:
-            return 80
+            return 85
         elif min_diameter > 70:
             return 75
         elif min_diameter > 60:
